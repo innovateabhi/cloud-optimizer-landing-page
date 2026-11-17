@@ -9,7 +9,12 @@ def create_app():
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     from app.routes.dashboard import dashboard_bp
+    from app.routes.auth import auth_bp
+    from app.routes.cloud_accounts import cloud_accounts_bp
+
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(cloud_accounts_bp)
 
     return app
 

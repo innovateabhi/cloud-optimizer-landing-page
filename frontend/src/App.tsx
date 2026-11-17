@@ -12,6 +12,7 @@ import { TermsOfServicePage } from './pages/marketing/TermsOfServicePage';
 import { DemoDashboardPage } from './pages/dashboard/DemoDashboardPage';
 import { LiveDashboardPage } from './pages/dashboard/LiveDashboardPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
+import { SetupWizardPage } from './pages/onboarding/SetupWizardPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -46,6 +47,10 @@ export const App: React.FC = () => {
 
         {/* Platform Owner / Superadmin Operations Dashboard */}
         <Route path="/admin" element={<AdminDashboardPage />} />
+
+        {/* Customer Cloud Account Setup Wizard (Post-Payment IAM Onboarding) */}
+        <Route path="/setup-wizard" element={<SetupWizardPage />} />
+        <Route path="/onboarding" element={<SetupWizardPage />} />
 
         {/* Authentication Routes */}
         <Route path="/login" element={<LoginPage />} />

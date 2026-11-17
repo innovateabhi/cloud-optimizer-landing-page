@@ -40,6 +40,7 @@ import {
   AlertCircle,
   Loader2,
   Lock,
+  Key,
   CreditCard,
   Building2,
   Users
@@ -114,7 +115,7 @@ export const LiveDashboardPage: React.FC = () => {
   
   // Active Plan State (Free, Starter, Business, Enterprise)
   const initialPlan = (searchParams.get('plan') as any) || localStorage.getItem('cloud_optimizer_plan') || 'starter';
-  const tenantParam = searchParams.get('tenant') || 'Acme Cloud Production';
+  const tenantParam = searchParams.get('tenant') || localStorage.getItem('cloud_optimizer_tenant') || (initialPlan === 'free' ? 'Acme Cloud Labs' : initialPlan === 'business' ? 'GlobalScale Logistics' : 'TechNova Solutions');
 
   const [currentPlan, setCurrentPlan] = useState<'free' | 'starter' | 'business' | 'enterprise'>(initialPlan);
   const [activeTab, setActiveTab] = useState<
@@ -213,9 +214,14 @@ export const LiveDashboardPage: React.FC = () => {
   // Sync plan change
   const handleSwitchPlan = (newPlan: 'free' | 'starter' | 'business' | 'enterprise') => {
     setCurrentPlan(newPlan);
+    const newTid = newPlan === 'free' ? '1' : newPlan === 'business' ? '3' : '2';
+    const newTenant = newPlan === 'free' ? 'Acme Cloud Labs' : newPlan === 'business' ? 'GlobalScale Logistics' : 'TechNova Solutions';
     localStorage.setItem('cloud_optimizer_plan', newPlan);
-    setSearchParams({ plan: newPlan, tenant: tenantParam });
+    localStorage.setItem('cloud_optimizer_tenant', newTenant);
+    localStorage.setItem('cloud_optimizer_tenant_id', newTid);
+    setSearchParams({ plan: newPlan, tenant: newTenant, tenant_id: newTid });
     triggerToast(`Switched dashboard view to ${newPlan.toUpperCase()} plan.`);
+    fetchData(newPlan, newTid);
   };
 
   // Trigger Mock UPI Upgrade
@@ -234,16 +240,19 @@ export const LiveDashboardPage: React.FC = () => {
     triggerToast(`Payment verified! Upgraded to ${data.planName}. All features unlocked!`);
   };
 
-  // Fetch all live backend data from MySQL
-  const fetchData = async () => {
+  // Fetch all live backend data from MySQL filtered by tenant & plan
+  const fetchData = async (targetPlan = currentPlan, targetTid?: string) => {
     try {
       setLoading(true);
+      const tid = targetTid || searchParams.get('tenant_id') || (targetPlan === 'free' ? '1' : targetPlan === 'business' ? '3' : '2');
+      const query = `?plan=${targetPlan}&tenant_id=${tid}`;
+
       const [sumRes, resRes, recRes, actRes, repRes] = await Promise.all([
-        fetch('/api/dashboard/summary').then((r) => r.json()),
-        fetch('/api/resources').then((r) => r.json()),
-        fetch('/api/recommendations').then((r) => r.json()),
-        fetch('/api/actions').then((r) => r.json()),
-        fetch('/api/reports').then((r) => r.json()),
+        fetch(`/api/dashboard/summary${query}`).then((r) => r.json()),
+        fetch(`/api/resources${query}`).then((r) => r.json()),
+        fetch(`/api/recommendations${query}`).then((r) => r.json()),
+        fetch(`/api/actions${query}`).then((r) => r.json()),
+        fetch(`/api/reports${query}`).then((r) => r.json()),
       ]);
 
       if (sumRes.status === 'success') setSummary(sumRes.data);
@@ -259,14 +268,12 @@ export const LiveDashboardPage: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
     const p = searchParams.get('plan');
+    const tid = searchParams.get('tenant_id') || (p === 'free' ? '1' : p === 'business' ? '3' : '2');
     if (p && ['free', 'starter', 'business', 'enterprise'].includes(p)) {
       setCurrentPlan(p as any);
     }
+    fetchData((p as any) || currentPlan, tid);
   }, [searchParams]);
 
   // Run the real 6-agent analysis pipeline
@@ -440,6 +447,16 @@ export const LiveDashboardPage: React.FC = () => {
             <span className="hidden sm:inline">AI Copilot</span>
           </button>
 
+          {/* Cloud IAM / Setup Wizard Link */}
+          <Link
+            to={`/setup-wizard?plan=${currentPlan}&tenant=${encodeURIComponent(tenantParam)}`}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 font-bold text-xs border border-blue-700/50 transition-colors"
+            title="Configure Cloud IAM Credentials & 2FA"
+          >
+            <Key className="w-3.5 h-3.5 text-blue-300" />
+            <span className="hidden lg:inline">Cloud IAM Setup</span>
+          </Link>
+
           {/* Platform Admin Link */}
           <Link
             to="/admin"
@@ -595,7 +612,7 @@ export const LiveDashboardPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={fetchData}
+              onClick={() => fetchData()}
               className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#2563EB] ${loading ? 'animate-spin' : ''}`} />

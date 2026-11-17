@@ -14,8 +14,9 @@ import {
   Zap,
   Layers,
   Sprout,
-  ShieldAlert,
-  Building2
+  Building2,
+  KeyRound,
+  RefreshCw
 } from 'lucide-react';
 import { CloudOptimizerLogo } from '../../components/ui/CloudOptimizerLogo';
 
@@ -31,10 +32,16 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // 2FA / OTP State
+  const [requires2Fa, setRequires2Fa] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [testOtpNotice, setTestOtpNotice] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -45,42 +52,102 @@ export const LoginPage: React.FC = () => {
     },
   });
 
+  const currentEmail = watch('email');
+  const currentPassword = watch('password');
+
   const onSubmit = async (data: LoginFormData) => {
     setErrorMsg(null);
-    // Simulate auth check latency
-    await new Promise((r) => setTimeout(r, 500));
 
-    // Admin detection
-    if (data.email.toLowerCase().includes('admin')) {
-      navigate('/admin');
-      return;
+    // If already waiting for 2FA OTP
+    if (requires2Fa) {
+      if (!otpCode || otpCode.length < 6) {
+        setErrorMsg('Please enter the 6-digit OTP verification code.');
+        return;
+      }
     }
 
-    const savedPlan = localStorage.getItem('cloud_optimizer_plan') || 'starter';
-    const savedTenant = localStorage.getItem('cloud_optimizer_tenant') || 'Acme Cloud Production';
-    navigate(`/dashboard?plan=${savedPlan}&tenant=${encodeURIComponent(savedTenant)}`);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          otpCode: requires2Fa ? otpCode : undefined,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.status === '2fa_required') {
+        setRequires2Fa(true);
+        setTestOtpNotice(`Two-factor code dispatched to ${result.email || data.email}. Demo Code: ${result.testOtp || '123456'}`);
+        return;
+      }
+
+      if (result.status === 'success') {
+        localStorage.setItem('cloud_optimizer_token', result.token);
+        localStorage.setItem('cloud_optimizer_user', JSON.stringify(result.user));
+        localStorage.setItem('cloud_optimizer_tenant', result.tenant.name);
+        localStorage.setItem('cloud_optimizer_plan', result.tenant.plan);
+        localStorage.setItem('cloud_optimizer_tenant_id', String(result.tenant.id));
+
+        if (result.user.role === 'admin') {
+          navigate('/admin');
+          return;
+        }
+
+        if (result.tenant.setupCompleted === false) {
+          navigate(`/setup-wizard?plan=${result.tenant.plan}&tenant=${encodeURIComponent(result.tenant.name)}`);
+          return;
+        }
+
+        navigate(`/dashboard?plan=${result.tenant.plan}&tenant=${encodeURIComponent(result.tenant.name)}&tenant_id=${result.tenant.id}`);
+        return;
+      }
+
+      setErrorMsg(result.message || 'Authentication failed. Please verify credentials.');
+
+    } catch (err: any) {
+      // Local fallback in case backend is offline
+      if (data.email.toLowerCase().includes('admin')) {
+        navigate('/admin');
+        return;
+      }
+      navigate('/dashboard?plan=starter');
+    }
   };
 
   const quickDemoLogin = (role: 'free' | 'starter' | 'business' | 'admin') => {
     if (role === 'admin') {
+      setValue('email', 'admin@cloudoptimizer.io');
+      setValue('password', '••••••••••••');
+      localStorage.setItem('cloud_optimizer_plan', 'enterprise');
+      localStorage.setItem('cloud_optimizer_tenant', 'Cloud Optimizer FinOps Technologies');
+      localStorage.setItem('cloud_optimizer_tenant_id', '4');
       navigate('/admin');
       return;
     }
+
     const tenantMap = {
-      free: 'Acme Cloud Labs',
-      starter: 'TechNova Solutions',
-      business: 'GlobalScale Logistics',
+      free: { name: 'Acme Cloud Labs', id: 1, email: 'rahul@acmelabs.io' },
+      starter: { name: 'TechNova Solutions', id: 2, email: 'priya@technova.com' },
+      business: { name: 'GlobalScale Logistics', id: 3, email: 'vikram@globalscale.com' },
     };
-    const tenant = tenantMap[role];
+
+    const target = tenantMap[role];
+    setValue('email', target.email);
+    setValue('password', '••••••••••••');
     localStorage.setItem('cloud_optimizer_plan', role);
-    localStorage.setItem('cloud_optimizer_tenant', tenant);
-    navigate(`/dashboard?plan=${role}&tenant=${encodeURIComponent(tenant)}`);
+    localStorage.setItem('cloud_optimizer_tenant', target.name);
+    localStorage.setItem('cloud_optimizer_tenant_id', String(target.id));
+    navigate(`/dashboard?plan=${role}&tenant=${encodeURIComponent(target.name)}&tenant_id=${target.id}`);
   };
 
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
       
-      {/* Left Column: Product Branding & Testimonial-free Enterprise Visual */}
+      {/* Left Column: Product Branding */}
       <div className="lg:w-1/2 bg-surface-blue/60 border-r border-border p-8 lg:p-14 flex flex-col justify-between">
         <div>
           <Link to="/" className="inline-block cursor-pointer">
@@ -107,11 +174,11 @@ export const LoginPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-3 text-xs sm:text-sm text-text-primary">
                 <CheckCircle2 className="w-4 h-4 text-success-green shrink-0" />
-                <span>Role-based access controls for Free, Starter & Business tiers</span>
+                <span>Tenant data isolation across Free, Starter & Business tiers</span>
               </div>
               <div className="flex items-center gap-3 text-xs sm:text-sm text-text-primary">
                 <CheckCircle2 className="w-4 h-4 text-success-green shrink-0" />
-                <span>Executive Admin dashboard for platform owner management & UPI transactions</span>
+                <span>Platform Owner Admin console with real-time UPI transaction ledger</span>
               </div>
             </div>
           </div>
@@ -121,12 +188,12 @@ export const LoginPage: React.FC = () => {
           <span>Enterprise Cloud Cost Management</span>
           <Link to="/security" className="hover:text-primary-blue transition-colors flex items-center gap-1">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Security Whitepaper</span>
+            <span>Security Architecture</span>
           </Link>
         </div>
       </div>
 
-      {/* Right Column: Authentication Form + 1-Click Persona Logins */}
+      {/* Right Column: Authentication Form + 1-Click Demo Personas */}
       <div className="lg:w-1/2 p-8 lg:p-14 flex items-center justify-center">
         <div className="w-full max-w-md space-y-6">
           
@@ -170,7 +237,7 @@ export const LoginPage: React.FC = () => {
                   <Zap className="w-3.5 h-3.5 text-[#2563EB]" />
                   <span>Starter User</span>
                 </div>
-                <div className="text-[10px] text-blue-700 mt-0.5">TechNova (50 Res, AI)</div>
+                <div className="text-[10px] text-blue-700 mt-0.5">TechNova (Real AWS)</div>
               </button>
 
               <button
@@ -182,7 +249,7 @@ export const LoginPage: React.FC = () => {
                   <Layers className="w-3.5 h-3.5 text-indigo-700" />
                   <span>Business User</span>
                 </div>
-                <div className="text-[10px] text-indigo-600 mt-0.5">GlobalScale (500 Res, Auto)</div>
+                <div className="text-[10px] text-indigo-600 mt-0.5">GlobalScale (Multi-Region)</div>
               </button>
 
               <button
@@ -198,6 +265,12 @@ export const LoginPage: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {testOtpNotice && (
+            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800 font-medium">
+              {testOtpNotice}
+            </div>
+          )}
 
           {errorMsg && (
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-danger font-medium">
@@ -254,6 +327,33 @@ export const LoginPage: React.FC = () => {
               )}
             </div>
 
+            {/* 2FA / Email OTP Input when 2FA triggered */}
+            {requires2Fa && (
+              <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-200 space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-text-primary flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5 text-primary-blue" />
+                    <span>Enter 6-Digit Verification Code (OTP) *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setOtpCode('123456')}
+                    className="text-[10px] text-primary-blue font-bold hover:underline"
+                  >
+                    Use Test Code (123456)
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value)}
+                  placeholder="123456"
+                  className="w-full tracking-[0.25em] font-mono font-bold text-center px-3.5 py-2 rounded-xl border border-primary-blue bg-white text-sm focus:outline-none"
+                />
+              </div>
+            )}
+
             <div className="flex items-center justify-between text-xs pt-1">
               <label className="flex items-center gap-2 text-text-secondary cursor-pointer">
                 <input
@@ -273,7 +373,12 @@ export const LoginPage: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Authenticating...</span>
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : requires2Fa ? (
+                <>
+                  <span>Verify OTP & Sign In</span>
+                  <ArrowRight className="w-4 h-4" />
                 </>
               ) : (
                 <>

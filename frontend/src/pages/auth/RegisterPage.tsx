@@ -90,13 +90,27 @@ export const RegisterPage: React.FC = () => {
   };
 
   const onSubmit = async (data: RegisterFormData) => {
-    // If Free plan: no payment required, immediate registration
+    // If Free plan: no payment required, immediate registration & proceed to setup wizard
     if (data.plan === 'free') {
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        if (result.token) {
+          localStorage.setItem('cloud_optimizer_token', result.token);
+        }
+      } catch (err) {
+        console.warn('Register fallback:', err);
+      }
+
       localStorage.setItem('cloud_optimizer_plan', 'free');
       localStorage.setItem('cloud_optimizer_tenant', data.organizationName);
       localStorage.setItem('cloud_optimizer_user', data.fullName);
       confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-      navigate(`/dashboard?plan=free&tenant=${encodeURIComponent(data.organizationName)}`);
+      navigate(`/setup-wizard?plan=free&tenant=${encodeURIComponent(data.organizationName)}`);
       return;
     }
 
@@ -105,16 +119,31 @@ export const RegisterPage: React.FC = () => {
     setShowPaymentModal(true);
   };
 
-  const handlePaymentSuccess = (payment: PaymentSuccessData) => {
+  const handlePaymentSuccess = async (payment: PaymentSuccessData) => {
     setShowPaymentModal(false);
     if (pendingRegistration) {
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pendingRegistration),
+        });
+        const result = await res.json();
+        if (result.token) {
+          localStorage.setItem('cloud_optimizer_token', result.token);
+        }
+      } catch (err) {
+        console.warn('Register fallback:', err);
+      }
+
       localStorage.setItem('cloud_optimizer_plan', pendingRegistration.plan);
       localStorage.setItem('cloud_optimizer_tenant', pendingRegistration.organizationName);
       localStorage.setItem('cloud_optimizer_user', pendingRegistration.fullName);
       confetti({ particleCount: 100, spread: 75, origin: { y: 0.6 } });
-      navigate(`/dashboard?plan=${pendingRegistration.plan}&tenant=${encodeURIComponent(pendingRegistration.organizationName)}`);
+      // Directs to Cloud IAM Setup Wizard post payment
+      navigate(`/setup-wizard?plan=${pendingRegistration.plan}&tenant=${encodeURIComponent(pendingRegistration.organizationName)}&paid=true`);
     } else {
-      navigate(`/dashboard?plan=${payment.planId}`);
+      navigate(`/setup-wizard?plan=${payment.planId}&paid=true`);
     }
   };
 

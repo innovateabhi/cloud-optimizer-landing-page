@@ -1,9 +1,28 @@
-from flask import Blueprint, jsonify, render_template, send_file
+from flask import Blueprint, jsonify, render_template, send_file, request
 from app.analysis import run_analysis
 from app.database.connection import get_db_connection
 
 
 dashboard_bp = Blueprint("dashboard", __name__)
+
+
+def resolve_tenant_id():
+    tid = request.args.get("tenant_id")
+    if tid:
+        try:
+            return int(tid)
+        except ValueError:
+            pass
+    plan = request.args.get("plan")
+    if plan == "free":
+        return 1
+    elif plan == "starter":
+        return 2
+    elif plan == "business":
+        return 3
+    elif plan == "enterprise":
+        return 4
+    return None
 
 
 # ============================================================
@@ -57,34 +76,57 @@ def dashboard_summary_api():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    tid = resolve_tenant_id()
 
     # 1. Total resources count & types
-    cursor.execute("SELECT COUNT(*), resource_type FROM resources GROUP BY resource_type")
+    if tid:
+        cursor.execute("SELECT COUNT(*), resource_type FROM resources WHERE tenant_id = %s GROUP BY resource_type", (tid,))
+    else:
+        cursor.execute("SELECT COUNT(*), resource_type FROM resources GROUP BY resource_type")
     res_rows = cursor.fetchall()
     total_resources = sum(r[0] for r in res_rows)
     resource_breakdown = {r[1]: r[0] for r in res_rows}
 
     # 2. Recommendations summary
-    cursor.execute("""
-        SELECT COUNT(*), COALESCE(SUM(estimated_savings), 0)
-        FROM recommendations
-        WHERE status = 'pending'
-    """)
+    if tid:
+        cursor.execute("""
+            SELECT COUNT(*), COALESCE(SUM(estimated_savings), 0)
+            FROM recommendations
+            WHERE status = 'pending' AND tenant_id = %s
+        """, (tid,))
+    else:
+        cursor.execute("""
+            SELECT COUNT(*), COALESCE(SUM(estimated_savings), 0)
+            FROM recommendations
+            WHERE status = 'pending'
+        """)
     rec_tuple = cursor.fetchone()
     rec_count = rec_tuple[0] if rec_tuple else 0
     total_savings = rec_tuple[1] if rec_tuple else 0
 
     # 3. Actions count
-    cursor.execute("SELECT COUNT(*) FROM actions")
+    if tid:
+        cursor.execute("SELECT COUNT(*) FROM actions WHERE tenant_id = %s", (tid,))
+    else:
+        cursor.execute("SELECT COUNT(*) FROM actions")
     actions_count = cursor.fetchone()[0]
 
     # 4. Latest analysis run
-    cursor.execute("""
-        SELECT id, started_at, completed_at, status, estimated_savings
-        FROM analysis_runs
-        ORDER BY id DESC
-        LIMIT 1
-    """)
+    if tid:
+        cursor.execute("""
+            SELECT id, started_at, completed_at, status, estimated_savings
+            FROM analysis_runs
+            WHERE tenant_id = %s
+            ORDER BY id DESC
+            LIMIT 1
+        """, (tid,))
+    else:
+        cursor.execute("""
+            SELECT id, started_at, completed_at, status, estimated_savings
+            FROM analysis_runs
+            ORDER BY id DESC
+            LIMIT 1
+        """)
     last_run = cursor.fetchone()
     last_run_data = None
     if last_run:
@@ -212,19 +254,35 @@ def resources_api():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    tid = resolve_tenant_id()
 
-    cursor.execute("""
-        SELECT
-            resource_id,
-            resource_type,
-            resource_name,
-            region,
-            state,
-            instance_type,
-            last_seen_at
-        FROM resources
-        ORDER BY resource_type, resource_id
-    """)
+    if tid:
+        cursor.execute("""
+            SELECT
+                resource_id,
+                resource_type,
+                resource_name,
+                region,
+                state,
+                instance_type,
+                last_seen_at
+            FROM resources
+            WHERE tenant_id = %s
+            ORDER BY resource_type, resource_id
+        """, (tid,))
+    else:
+        cursor.execute("""
+            SELECT
+                resource_id,
+                resource_type,
+                resource_name,
+                region,
+                state,
+                instance_type,
+                last_seen_at
+            FROM resources
+            ORDER BY resource_type, resource_id
+        """)
 
     rows = cursor.fetchall()
 
@@ -264,21 +322,38 @@ def recommendations_api():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    tid = resolve_tenant_id()
 
-    cursor.execute("""
-        SELECT
-            id,
-            resource_id,
-            recommendation_type,
-            recommendation,
-            estimated_savings,
-            risk_level,
-            confidence,
-            status
-        FROM recommendations
-        WHERE status = 'pending'
-        ORDER BY id DESC
-    """)
+    if tid:
+        cursor.execute("""
+            SELECT
+                id,
+                resource_id,
+                recommendation_type,
+                recommendation,
+                estimated_savings,
+                risk_level,
+                confidence,
+                status
+            FROM recommendations
+            WHERE status = 'pending' AND tenant_id = %s
+            ORDER BY id DESC
+        """, (tid,))
+    else:
+        cursor.execute("""
+            SELECT
+                id,
+                resource_id,
+                recommendation_type,
+                recommendation,
+                estimated_savings,
+                risk_level,
+                confidence,
+                status
+            FROM recommendations
+            WHERE status = 'pending'
+            ORDER BY id DESC
+        """)
 
     rows = cursor.fetchall()
 
@@ -315,20 +390,37 @@ def actions_api():
 
     conn = get_db_connection()
     cursor = conn.cursor()
+    tid = resolve_tenant_id()
 
-    cursor.execute("""
-        SELECT
-            id,
-            resource_id,
-            action_type,
-            action_status,
-            reason,
-            risk_level,
-            executed_at,
-            created_at
-        FROM actions
-        ORDER BY id DESC
-    """)
+    if tid:
+        cursor.execute("""
+            SELECT
+                id,
+                resource_id,
+                action_type,
+                action_status,
+                reason,
+                risk_level,
+                executed_at,
+                created_at
+            FROM actions
+            WHERE tenant_id = %s
+            ORDER BY id DESC
+        """, (tid,))
+    else:
+        cursor.execute("""
+            SELECT
+                id,
+                resource_id,
+                action_type,
+                action_status,
+                reason,
+                risk_level,
+                executed_at,
+                created_at
+            FROM actions
+            ORDER BY id DESC
+        """)
 
     rows = cursor.fetchall()
 
