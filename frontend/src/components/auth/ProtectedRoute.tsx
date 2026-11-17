@@ -25,6 +25,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   if (requireAdmin) {
     const isAdmin = 
       user?.role === 'admin' || 
+      user?.role === 'staff' || 
       user?.email?.toLowerCase().includes('admin') || 
       user?.email === 'office.abhinandan@gmail.com';
 

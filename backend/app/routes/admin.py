@@ -250,7 +250,7 @@ def update_user_role(user_id):
     data = request.get_json() or {}
     new_role = data.get('role', 'user').lower()
 
-    if new_role not in ['admin', 'user']:
+    if new_role not in ['admin', 'staff', 'user']:
         return jsonify({'status': 'error', 'message': 'Invalid role'}), 400
 
     conn = get_db_connection()
@@ -260,6 +260,108 @@ def update_user_role(user_id):
         cur.execute("UPDATE users SET role = %s WHERE id = %s", (new_role, user_id))
         conn.commit()
         return jsonify({'status': 'success', 'message': f'User ID {user_id} role updated to {new_role}.'})
+    finally:
+        conn.close()
+
+@admin_bp.route('/users/create', methods=['POST'])
+def create_user():
+    data = request.get_json() or {}
+    full_name = data.get('fullName', '').strip()
+    email = data.get('email', '').strip().lower()
+    role = data.get('role', 'staff').lower()
+    password = data.get('password', 'Admin@CloudOptimizer2026')
+    tenant_id = data.get('tenantId', 4)
+
+    if not full_name or not email:
+        return jsonify({'status': 'error', 'message': 'Full name and email are required.'}), 400
+
+    if role not in ['admin', 'staff', 'user']:
+        role = 'staff'
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            return jsonify({'status': 'error', 'message': f'An account with email {email} already exists.'}), 400
+
+        pw_hash = hash_pw(password)
+        cur.execute("""
+            INSERT INTO users (tenant_id, email, password_hash, full_name, role, two_factor_enabled)
+            VALUES (%s, %s, %s, %s, %s, 0)
+        """, (tenant_id, email, pw_hash, full_name, role))
+        conn.commit()
+        user_id = cur.lastrowid
+
+        return jsonify({
+            'status': 'success',
+            'message': f"Account created for {full_name} ({email}) with {role.upper()} privileges.",
+            'userId': user_id
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@admin_bp.route('/users/<int:user_id>/delete', methods=['POST', 'DELETE'])
+def delete_user(user_id):
+    if user_id in [4, 5]:
+        return jsonify({'status': 'error', 'message': 'Primary platform owner accounts cannot be deleted.'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+        return jsonify({'status': 'success', 'message': f'User ID {user_id} deleted.'})
+    finally:
+        conn.close()
+
+@admin_bp.route('/tenants/create', methods=['POST'])
+def create_tenant():
+    data = request.get_json() or {}
+    name = data.get('name', '').strip()
+    plan = data.get('plan', 'starter').lower()
+    owner_name = data.get('ownerName', '').strip()
+    owner_email = data.get('ownerEmail', '').strip().lower()
+    owner_password = data.get('ownerPassword', 'Admin@CloudOptimizer2026')
+
+    if not name or not owner_email:
+        return jsonify({'status': 'error', 'message': 'Company name and owner email are required.'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM tenants WHERE name = %s", (name,))
+        if cur.fetchone():
+            return jsonify({'status': 'error', 'message': f'An organization named "{name}" already exists.'}), 400
+
+        cur.execute("""
+            INSERT INTO tenants (name, plan, status, setup_completed, monthly_budget, budget_currency, budget_alert_threshold, budget_alert_email)
+            VALUES (%s, %s, 'active', 1, 500.00, 'USD', 85, %s)
+        """, (name, plan, owner_email))
+        tenant_id = cur.lastrowid
+
+        pw_hash = hash_pw(owner_password)
+        cur.execute("""
+            INSERT INTO users (tenant_id, email, password_hash, full_name, role, two_factor_enabled)
+            VALUES (%s, %s, %s, %s, 'user', 0)
+        """, (tenant_id, owner_email, pw_hash, owner_name or 'Admin Contact'))
+
+        conn.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Organization "{name}" created successfully with {plan.upper()} tier.',
+            'tenantId': tenant_id
+        }), 201
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
     finally:
         conn.close()
 

@@ -38,7 +38,12 @@ import {
   LogOut,
   Loader2,
   Sparkles,
-  Cloud
+  Cloud,
+  UserPlus,
+  Plus,
+  Shield,
+  Layers,
+  FileSpreadsheet
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CloudOptimizerLogo } from '../../components/ui/CloudOptimizerLogo';
@@ -62,7 +67,7 @@ interface PlatformUser {
   id: number;
   email: string;
   fullName: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'staff' | 'user';
   twoFactorEnabled: boolean;
   tenantName: string;
   tenantPlan: string;
@@ -132,10 +137,32 @@ export const AdminDashboardPage: React.FC = () => {
   const [transactions, setTransactions] = useState<PaymentTransaction[]>([]);
 
   // Modals State
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [showCreateTenantModal, setShowCreateTenantModal] = useState(false);
   const [editingTenant, setEditingTenant] = useState<CompanyTenant | null>(null);
   const [newSelectedPlan, setNewSelectedPlan] = useState<'free' | 'starter' | 'business' | 'enterprise'>('starter');
   const [resettingUser, setResettingUser] = useState<PlatformUser | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('Admin@CloudOptimizer2026');
+
+  // New User Form State
+  const [newUserForm, setNewUserForm] = useState({
+    fullName: '',
+    email: '',
+    role: 'staff' as 'admin' | 'staff' | 'user',
+    password: 'Admin@CloudOptimizer2026',
+    tenantId: 4
+  });
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  // New Tenant Form State
+  const [newTenantForm, setNewTenantForm] = useState({
+    name: '',
+    plan: 'starter' as 'free' | 'starter' | 'business' | 'enterprise',
+    ownerName: '',
+    ownerEmail: '',
+    ownerPassword: 'Admin@CloudOptimizer2026'
+  });
+  const [creatingTenant, setCreatingTenant] = useState(false);
 
   const triggerToast = (msg: string) => {
     setToastMsg(msg);
@@ -210,6 +237,80 @@ export const AdminDashboardPage: React.FC = () => {
     fetchAdminData();
   }, []);
 
+  // Create Staff / Admin User
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserForm.fullName || !newUserForm.email) {
+      triggerToast('Full name and email are required.');
+      return;
+    }
+    setCreatingUser(true);
+    try {
+      const res = await fetch('/api/admin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUserForm),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        confetti({ particleCount: 60, spread: 60 });
+        triggerToast(data.message || 'Staff / Admin user created successfully.');
+        setShowCreateUserModal(false);
+        setNewUserForm({
+          fullName: '',
+          email: '',
+          role: 'staff',
+          password: 'Admin@CloudOptimizer2026',
+          tenantId: 4
+        });
+        fetchAdminData();
+      } else {
+        triggerToast(`Failed: ${data.message}`);
+      }
+    } catch (err: any) {
+      triggerToast(`User creation error: ${err.message}`);
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  // Create New Customer Organization / Tenant
+  const handleCreateTenant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantForm.name || !newTenantForm.ownerEmail) {
+      triggerToast('Company name and owner email are required.');
+      return;
+    }
+    setCreatingTenant(true);
+    try {
+      const res = await fetch('/api/admin/tenants/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTenantForm),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        confetti({ particleCount: 70, spread: 60 });
+        triggerToast(data.message || 'Organization registered successfully.');
+        setShowCreateTenantModal(false);
+        setNewTenantForm({
+          name: '',
+          plan: 'starter',
+          ownerName: '',
+          ownerEmail: '',
+          ownerPassword: 'Admin@CloudOptimizer2026'
+        });
+        fetchAdminData();
+      } else {
+        triggerToast(`Failed: ${data.message}`);
+      }
+    } catch (err: any) {
+      triggerToast(`Organization creation error: ${err.message}`);
+    } finally {
+      setCreatingTenant(false);
+    }
+  };
+
   // Update Subscription Plan in MySQL
   const handleSavePlanChange = async () => {
     if (!editingTenant) return;
@@ -273,7 +374,7 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Elevate / Demote User Role
   const handleToggleUserRole = async (userId: number, currentRole: string) => {
-    const nextRole = currentRole === 'admin' ? 'user' : 'admin';
+    const nextRole = currentRole === 'admin' ? 'staff' : currentRole === 'staff' ? 'user' : 'admin';
     try {
       const res = await fetch(`/api/admin/users/${userId}/role`, {
         method: 'POST',
@@ -287,6 +388,23 @@ export const AdminDashboardPage: React.FC = () => {
       }
     } catch (err: any) {
       triggerToast(`Role update error: ${err.message}`);
+    }
+  };
+
+  // Delete User
+  const handleDeleteUser = async (userId: number, email: string) => {
+    if (!window.confirm(`Delete user ${email}?`)) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/delete`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        triggerToast(data.message);
+        fetchAdminData();
+      } else {
+        triggerToast(`Delete error: ${data.message}`);
+      }
+    } catch (err: any) {
+      triggerToast(`Delete error: ${err.message}`);
     }
   };
 
@@ -357,33 +475,26 @@ export const AdminDashboardPage: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-[#070D18] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================
-          ULTRA-PREMIUM TOP BAR FOR PLATFORM OWNER
+          LIGHT-THEMED TOP BAR FOR PLATFORM OWNER
          ======================================================== */}
-      <header className="sticky top-0 z-50 bg-[#0B1322] border-b border-slate-800/90 px-4 sm:px-6 py-3 text-xs flex flex-wrap items-center justify-between gap-3 shadow-xl shrink-0">
+      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xs shrink-0">
         
         <div className="flex items-center gap-3">
           <Link to="/" className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center font-bold text-slate-950 text-xs shadow-md">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <span className="font-display font-extrabold text-sm tracking-tight text-white">
-                Cloud<span className="text-amber-400">Optimizer</span>
-              </span>
-              <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase tracking-wider">
-                Platform Superadmin
-              </span>
-            </div>
+            <CloudOptimizerLogo size="sm" />
+            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#2563EB] border border-blue-200 text-[10px] font-black uppercase tracking-wider">
+              Platform Superadmin
+            </span>
           </Link>
 
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-700 hidden sm:inline" />
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 hidden sm:inline" />
           
-          <div className="items-center gap-2 text-slate-400 font-mono text-[11px] hidden lg:flex">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>MySQL 8.x Live (127.0.0.1:3306) &bull; AWS ap-south-2 Multi-Tenant Cluster</span>
+          <div className="items-center gap-2 text-slate-500 font-medium text-[11px] hidden lg:flex">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>MySQL 8.x Live &bull; AWS ap-south-2 Multi-Tenant Cluster</span>
           </div>
         </div>
 
@@ -392,15 +503,15 @@ export const AdminDashboardPage: React.FC = () => {
             type="button"
             onClick={fetchAdminData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-primary-blue ${loading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh Data</span>
           </button>
 
           <Link
             to="/dashboard?plan=business"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#2563EB] border border-blue-200 font-semibold text-xs transition-colors cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Open Customer View</span>
@@ -409,7 +520,7 @@ export const AdminDashboardPage: React.FC = () => {
           <button
             type="button"
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Sign Out</span>
@@ -421,8 +532,8 @@ export const AdminDashboardPage: React.FC = () => {
       {/* TOAST ALERT */}
       {toastMsg && (
         <div className="fixed top-14 right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white border border-amber-500/40 shadow-2xl text-xs font-semibold">
-            <CheckCircle2 className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-slate-900 text-white border border-slate-700 shadow-2xl text-xs font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{toastMsg}</span>
           </div>
         </div>
@@ -433,112 +544,131 @@ export const AdminDashboardPage: React.FC = () => {
          ======================================================== */}
       <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto space-y-6 flex-1">
         
-        {/* EXECUTIVE BANNER FOR FOUNDER */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-[#0F172A] border border-slate-700/80 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
+        {/* EXECUTIVE FOUNDER BANNER (LIGHT SAAS STYLE) */}
+        <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-[11px] font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-blue-300" />
               <span>Cloud Optimizer Enterprise Control Center</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-display font-extrabold text-white tracking-tight">
               Welcome back, Abhinandan
             </h1>
-            <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Real-time platform telemetry across <strong>{overview?.tenantsTotal ?? 5} organizations</strong>, 
-              <strong> {overview?.resourcesTotal ?? 7} tracked cloud assets</strong> in AWS ap-south-2, and automated SBI UPI financial settlements.
+            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+              Managing <strong>{overview?.tenantsTotal ?? 5} client organizations</strong>, 
+              <strong> {users.length} enrolled users & platform staff</strong>, and 
+              <strong> {overview?.resourcesTotal ?? 7} live AWS resources</strong> in region ap-south-2.
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowCreateUserModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-xs shadow-md cursor-pointer flex items-center gap-1.5 transition-all"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-primary-blue" />
+              <span>+ Add Admin / Staff</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowCreateTenantModal(true)}
+              className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md cursor-pointer flex items-center gap-1.5 transition-all"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>+ Register Company</span>
+            </button>
+
             <button
               type="button"
               onClick={handleRunGlobalScan}
               disabled={runningGlobalScan}
-              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs shadow-lg cursor-pointer flex items-center gap-2 transition-all disabled:opacity-60"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-extrabold text-xs shadow-md cursor-pointer flex items-center gap-1.5 transition-all disabled:opacity-60"
             >
               {runningGlobalScan ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Scanning All Tenants...</span>
                 </>
               ) : (
                 <>
-                  <Play className="w-4 h-4 fill-slate-950" />
-                  <span>Run Global Multi-Agent Scan</span>
+                  <Play className="w-3.5 h-3.5 fill-slate-950" />
+                  <span>Run Global Discovery</span>
                 </>
               )}
             </button>
           </div>
         </div>
 
-        {/* KPI OVERVIEW CARDS */}
+        {/* TOP 4 KPI CARDS (LIGHT THEMED) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           
           {/* Total Tenants */}
-          <div className="p-5 rounded-3xl bg-[#0B1322] border border-slate-800 shadow-md space-y-3">
-            <div className="flex items-center justify-between text-slate-400">
-              <span className="text-xs font-bold uppercase tracking-wider">Total Tenants</span>
-              <Building2 className="w-4 h-4 text-amber-400" />
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-slate-500">
+              <span className="text-xs font-bold uppercase tracking-wider">Total Organizations</span>
+              <Building2 className="w-4 h-4 text-[#2563EB]" />
             </div>
-            <div className="font-display font-extrabold text-3xl text-white">
+            <div className="font-display font-extrabold text-3xl text-slate-900">
               {overview?.tenantsTotal ?? tenants.length}
             </div>
-            <div className="text-xs text-slate-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{overview?.tenantsActive ?? tenants.length} Active Organizations</span>
+            <div className="text-xs text-slate-500 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span>{overview?.tenantsActive ?? tenants.length} Active Accounts</span>
             </div>
           </div>
 
           {/* Platform MRR (INR) */}
-          <div className="p-5 rounded-3xl bg-[#0B1322] border border-slate-800 shadow-md space-y-3">
-            <div className="flex items-center justify-between text-slate-400">
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-slate-500">
               <span className="text-xs font-bold uppercase tracking-wider">Platform MRR</span>
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <TrendingUp className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="font-display font-extrabold text-3xl text-emerald-400">
+            <div className="font-display font-extrabold text-3xl text-emerald-600">
               ₹{(overview?.totalMrrINR ?? 29996).toLocaleString('en-IN')}
             </div>
-            <div className="text-xs text-slate-400">
+            <div className="text-xs text-slate-500">
               Annualized ARR: ₹{((overview?.totalMrrINR ?? 29996) * 12).toLocaleString('en-IN')}
             </div>
           </div>
 
           {/* Tracked Cloud Assets */}
-          <div className="p-5 rounded-3xl bg-[#0B1322] border border-slate-800 shadow-md space-y-3">
-            <div className="flex items-center justify-between text-slate-400">
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-slate-500">
               <span className="text-xs font-bold uppercase tracking-wider">Tracked Cloud Assets</span>
-              <Server className="w-4 h-4 text-blue-400" />
+              <Server className="w-4 h-4 text-indigo-600" />
             </div>
-            <div className="font-display font-extrabold text-3xl text-white">
+            <div className="font-display font-extrabold text-3xl text-slate-900">
               {overview?.resourcesTotal ?? 7}
             </div>
-            <div className="text-xs text-slate-400">
-              {overview?.ec2Count ?? 6} EC2 Instances &bull; {overview?.rdsCount ?? 1} RDS DBs
+            <div className="text-xs text-slate-500">
+              {overview?.ec2Count ?? 6} EC2 &bull; {overview?.rdsCount ?? 1} RDS (ap-south-2)
             </div>
           </div>
 
           {/* Customer Savings Delivered */}
-          <div className="p-5 rounded-3xl bg-[#0B1322] border border-slate-800 shadow-md space-y-3">
-            <div className="flex items-center justify-between text-slate-400">
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between text-slate-500">
               <span className="text-xs font-bold uppercase tracking-wider">Client Savings Identified</span>
-              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <DollarSign className="w-4 h-4 text-emerald-600" />
             </div>
-            <div className="font-display font-extrabold text-3xl text-white">
+            <div className="font-display font-extrabold text-3xl text-slate-900">
               +${overview?.totalSavingsUSD ?? 8.06}/mo
             </div>
-            <div className="text-xs text-slate-400">
-              ₹{Math.round((overview?.totalSavingsUSD ?? 8.06) * 86.5).toLocaleString('en-IN')} / month in idle waste
+            <div className="text-xs text-slate-500">
+              ₹{Math.round((overview?.totalSavingsUSD ?? 8.06) * 86.5).toLocaleString('en-IN')} / month waste
             </div>
           </div>
 
         </div>
 
-        {/* NAVIGATION TABS */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2 overflow-x-auto">
+        {/* NAVIGATION TABS (LIGHT THEMED) */}
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2 overflow-x-auto">
           <div className="flex items-center gap-2">
             {[
               { id: 'tenants', label: 'Tenants & Companies', count: tenants.length },
-              { id: 'users', label: 'Platform Users & RBAC', count: users.length },
+              { id: 'users', label: 'Platform Users & Staff', count: users.length },
               { id: 'payments', label: 'UPI Financial Ledger', count: transactions.length },
               { id: 'telemetry', label: 'Multi-Agent & AWS Boto3' },
               { id: 'logs', label: 'System Audit Logs', count: systemLogs.length },
@@ -550,14 +680,14 @@ export const AdminDashboardPage: React.FC = () => {
                 onClick={() => setActiveTab(tab.id as any)}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
                 <span>{tab.label}</span>
                 {tab.count !== undefined && (
                   <span className={`px-2 py-0.5 rounded-full text-[10px] ${
-                    activeTab === tab.id ? 'bg-slate-950 text-white' : 'bg-slate-800 text-slate-300'
+                    activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
                   }`}>
                     {tab.count}
                   </span>
@@ -566,8 +696,8 @@ export const AdminDashboardPage: React.FC = () => {
             ))}
           </div>
 
-          <div className="text-[11px] text-slate-500 hidden sm:block">
-            Cloud Optimizer Superadmin Console
+          <div className="text-[11px] text-slate-500 hidden sm:block font-medium">
+            Superadmin Access Mode
           </div>
         </div>
 
@@ -586,12 +716,12 @@ export const AdminDashboardPage: React.FC = () => {
                   placeholder="Search company name, owner email, ID..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#0B1322] border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-primary-blue shadow-2xs"
                 />
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">Plan:</span>
+                <span className="text-xs text-slate-500 font-medium">Plan:</span>
                 {(['all', 'free', 'starter', 'business', 'enterprise'] as const).map(p => (
                   <button
                     key={p}
@@ -599,33 +729,42 @@ export const AdminDashboardPage: React.FC = () => {
                     onClick={() => setPlanFilter(p)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all cursor-pointer ${
                       planFilter === p
-                        ? 'bg-slate-700 text-amber-300 border border-amber-500/30'
-                        : 'bg-[#0B1322] text-slate-400 hover:text-white border border-slate-800'
+                        ? 'bg-primary-blue text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
                     }`}
                   >
                     {p}
                   </button>
                 ))}
+
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTenantModal(true)}
+                  className="ml-2 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer transition-all flex items-center gap-1.5 shadow-xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Company</span>
+                </button>
               </div>
             </div>
 
             {/* Tenants Data Table */}
-            <div className="bg-[#0B1322] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
+            <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070D18] border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
                     <tr>
                       <th className="p-4">Org ID / Company Name</th>
                       <th className="p-4">Owner / Contact</th>
                       <th className="p-4">Plan Tier</th>
                       <th className="p-4">Status</th>
-                      <th className="p-4">Assets</th>
+                      <th className="p-4">Tracked Assets</th>
                       <th className="p-4">Monthly Rev</th>
-                      <th className="p-4">Created</th>
+                      <th className="p-4">Joined Date</th>
                       <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100">
                     {filteredTenants.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="p-8 text-center text-slate-500">
@@ -634,13 +773,13 @@ export const AdminDashboardPage: React.FC = () => {
                       </tr>
                     ) : (
                       filteredTenants.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-800/40 transition-colors">
+                        <tr key={t.id} className="hover:bg-slate-50/60 transition-colors">
                           
                           <td className="p-4">
-                            <div className="font-bold text-white flex items-center gap-2">
+                            <div className="font-bold text-slate-900 flex items-center gap-2">
                               <span>{t.name}</span>
                               {t.tenantId === 4 && (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold">
+                                <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
                                   Owner
                                 </span>
                               )}
@@ -649,16 +788,16 @@ export const AdminDashboardPage: React.FC = () => {
                           </td>
 
                           <td className="p-4">
-                            <div className="text-slate-300 font-medium">{t.ownerName}</div>
-                            <div className="font-mono text-[11px] text-slate-400">{t.ownerEmail}</div>
+                            <div className="text-slate-800 font-semibold">{t.ownerName}</div>
+                            <div className="font-mono text-[11px] text-slate-500">{t.ownerEmail}</div>
                           </td>
 
                           <td className="p-4">
                             <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] border ${
-                              t.plan === 'free' ? 'bg-slate-800 text-slate-300 border-slate-700' :
-                              t.plan === 'starter' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' :
-                              t.plan === 'business' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' :
-                              'bg-amber-500/20 text-amber-300 border-amber-500/30 font-black'
+                              t.plan === 'free' ? 'bg-slate-100 text-slate-700 border-slate-200' :
+                              t.plan === 'starter' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                              t.plan === 'business' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                              'bg-amber-50 text-amber-800 border-amber-200 font-black'
                             }`}>
                               {t.plan}
                             </span>
@@ -667,23 +806,23 @@ export const AdminDashboardPage: React.FC = () => {
                           <td className="p-4">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold capitalize ${
                               t.status === 'active'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-800 border border-rose-200'
                             }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'active' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              <span className={`w-1.5 h-1.5 rounded-full ${t.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                               <span>{t.status}</span>
                             </span>
                           </td>
 
-                          <td className="p-4 font-mono font-bold text-slate-300">
-                            {t.resourcesCount}
+                          <td className="p-4 font-mono font-bold text-slate-700">
+                            {t.resourcesCount} resources
                           </td>
 
-                          <td className="p-4 font-bold text-white">
+                          <td className="p-4 font-bold text-slate-900">
                             ₹{t.monthlySpendINR.toLocaleString('en-IN')}
                           </td>
 
-                          <td className="p-4 text-slate-400 font-mono text-[11px]">
+                          <td className="p-4 text-slate-500 font-mono text-[11px]">
                             {t.joinedDate}
                           </td>
 
@@ -692,8 +831,8 @@ export const AdminDashboardPage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => handleImpersonateTenant(t)}
-                                title="Open customer dashboard"
-                                className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 transition-all cursor-pointer"
+                                title="Open customer dashboard view"
+                                className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-primary-blue border border-blue-200 transition-all cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
@@ -705,7 +844,7 @@ export const AdminDashboardPage: React.FC = () => {
                                   setNewSelectedPlan(t.plan);
                                 }}
                                 title="Change subscription plan"
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all cursor-pointer"
+                                className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-all cursor-pointer"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
@@ -716,8 +855,8 @@ export const AdminDashboardPage: React.FC = () => {
                                 title={t.status === 'active' ? 'Suspend Tenant' : 'Reactivate Tenant'}
                                 className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
                                   t.status === 'active'
-                                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/20'
-                                    : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20'
+                                    ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                                 }`}
                               >
                                 <Power className="w-3.5 h-3.5" />
@@ -728,7 +867,7 @@ export const AdminDashboardPage: React.FC = () => {
                                   type="button"
                                   onClick={() => handleDeleteTenant(t.tenantId, t.name)}
                                   title="Delete Tenant"
-                                  className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-all cursor-pointer"
+                                  className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -748,66 +887,89 @@ export const AdminDashboardPage: React.FC = () => {
         )}
 
         {/* ========================================================
-            TAB 2: PLATFORM USERS & RBAC MANAGEMENT
+            TAB 2: PLATFORM USERS & STAFF MANAGEMENT
            ======================================================== */}
         {activeTab === 'users' && (
           <div className="space-y-4 animate-fade-in">
-            <div className="bg-[#0B1322] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+              <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-display font-extrabold text-sm text-white">Registered Platform Accounts</h3>
-                  <p className="text-xs text-slate-400">Control system administrators and tenant owner permissions.</p>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">
+                    Platform Staff & Customer Accounts
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Manage Superadmins, Support Staff, FinOps Analysts, and Tenant users.
+                  </p>
                 </div>
-                <span className="text-xs text-amber-400 font-bold">{users.length} Users Enrolled</span>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowCreateUserModal(true)}
+                  className="px-4 py-2 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>+ Create Admin / Staff User</span>
+                </button>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070D18] border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
                     <tr>
                       <th className="p-4">User Identity</th>
                       <th className="p-4">Organization</th>
-                      <th className="p-4">Access Role</th>
+                      <th className="p-4">Role Privileges</th>
                       <th className="p-4">2FA Status</th>
-                      <th className="p-4">Registration</th>
-                      <th className="p-4 text-right">RBAC Actions</th>
+                      <th className="p-4">Registered Date</th>
+                      <th className="p-4 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100">
                     {users.map(u => (
-                      <tr key={u.id} className="hover:bg-slate-800/40 transition-colors">
+                      <tr key={u.id} className="hover:bg-slate-50/60 transition-colors">
                         <td className="p-4">
-                          <div className="font-bold text-white">{u.fullName}</div>
-                          <div className="font-mono text-[11px] text-slate-400">{u.email}</div>
+                          <div className="font-bold text-slate-900 flex items-center gap-2">
+                            <span>{u.fullName}</span>
+                            {(u.role === 'admin' || u.role === 'staff') && (
+                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${
+                                u.role === 'admin' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'
+                              }`}>
+                                {u.role === 'admin' ? 'Superadmin' : 'Staff'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-mono text-[11px] text-slate-500">{u.email}</div>
                         </td>
 
                         <td className="p-4">
-                          <div className="text-slate-300 font-semibold">{u.tenantName}</div>
+                          <div className="text-slate-800 font-semibold">{u.tenantName}</div>
                           <div className="text-[10px] text-slate-500 uppercase">{u.tenantPlan} plan</div>
                         </td>
 
                         <td className="p-4">
                           <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] border ${
                             u.role === 'admin'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200 font-black'
+                              : u.role === 'staff'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200 font-bold'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
                           }`}>
-                            {u.role === 'admin' ? 'Superadmin' : 'Standard User'}
+                            {u.role === 'admin' ? 'Superadmin' : u.role === 'staff' ? 'Platform Staff' : 'Customer User'}
                           </span>
                         </td>
 
                         <td className="p-4">
                           {u.twoFactorEnabled ? (
-                            <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>Enabled</span>
+                            <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Active</span>
                             </span>
                           ) : (
-                            <span className="text-slate-500">Disabled</span>
+                            <span className="text-slate-400">Disabled</span>
                           )}
                         </td>
 
-                        <td className="p-4 font-mono text-[11px] text-slate-400">
+                        <td className="p-4 font-mono text-[11px] text-slate-500">
                           {u.joinedDate}
                         </td>
 
@@ -818,11 +980,13 @@ export const AdminDashboardPage: React.FC = () => {
                               onClick={() => handleToggleUserRole(u.id, u.role)}
                               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                                 u.role === 'admin'
-                                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                                  : 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                                  : u.role === 'staff'
+                                  ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                                  : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
                               }`}
                             >
-                              {u.role === 'admin' ? 'Demote to User' : 'Promote to Admin'}
+                              {u.role === 'admin' ? 'Set Staff' : u.role === 'staff' ? 'Set User' : 'Promote Admin'}
                             </button>
 
                             <button
@@ -831,10 +995,21 @@ export const AdminDashboardPage: React.FC = () => {
                                 setResettingUser(u);
                                 setNewPasswordInput('Admin@CloudOptimizer2026');
                               }}
-                              className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all cursor-pointer"
+                              className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-semibold transition-all cursor-pointer"
                             >
-                              Reset Password
+                              Reset Pass
                             </button>
+
+                            {u.id > 5 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUser(u.id, u.email)}
+                                title="Delete user account"
+                                className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -851,44 +1026,44 @@ export const AdminDashboardPage: React.FC = () => {
            ======================================================== */}
         {activeTab === 'payments' && (
           <div className="space-y-4 animate-fade-in">
-            <div className="bg-[#0B1322] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
                 <div>
-                  <h3 className="font-display font-extrabold text-sm text-white">SBI UPI Settlement Ledger</h3>
-                  <p className="text-xs text-slate-400">Verified QR code payments deposited into SBI Account for Cloud Optimizer.</p>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">SBI UPI Settlement Ledger</h3>
+                  <p className="text-xs text-slate-500">Verified QR code payments deposited into SBI Account for Cloud Optimizer.</p>
                 </div>
-                <div className="text-xs text-emerald-400 font-bold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
+                <div className="text-xs text-emerald-700 font-bold flex items-center gap-1.5 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>100% Mock Clearing Verified</span>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070D18] border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
                     <tr>
                       <th className="p-4">Txn ID</th>
                       <th className="p-4">Customer</th>
-                      <th className="p-4">Plan</th>
+                      <th className="p-4">Plan Activated</th>
                       <th className="p-4">Amount</th>
-                      <th className="p-4">UTR Number</th>
+                      <th className="p-4">12-Digit UTR Ref</th>
                       <th className="p-4">Bank</th>
                       <th className="p-4">Timestamp</th>
-                      <th className="p-4 text-right">Status</th>
+                      <th className="p-4 text-right">Settlement</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100">
                     {transactions.map(tx => (
-                      <tr key={tx.transactionId} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 font-mono font-bold text-amber-400">{tx.transactionId}</td>
-                        <td className="p-4 font-bold text-white">{tx.companyName}</td>
-                        <td className="p-4 text-slate-300">{tx.planName}</td>
-                        <td className="p-4 font-bold text-emerald-400">₹{tx.amountINR.toLocaleString('en-IN')}</td>
-                        <td className="p-4 font-mono text-[11px] text-slate-300">{tx.utrNumber}</td>
-                        <td className="p-4 text-slate-400">{tx.bankName}</td>
-                        <td className="p-4 font-mono text-[11px] text-slate-500">{tx.timestamp}</td>
+                      <tr key={tx.transactionId} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="p-4 font-mono font-bold text-[#2563EB]">{tx.transactionId}</td>
+                        <td className="p-4 font-bold text-slate-900">{tx.companyName}</td>
+                        <td className="p-4 text-slate-700">{tx.planName}</td>
+                        <td className="p-4 font-bold text-emerald-600">₹{tx.amountINR.toLocaleString('en-IN')}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-700">{tx.utrNumber}</td>
+                        <td className="p-4 text-slate-600">{tx.bankName}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-400">{tx.timestamp}</td>
                         <td className="p-4 text-right">
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                             {tx.status}
                           </span>
                         </td>
@@ -907,41 +1082,41 @@ export const AdminDashboardPage: React.FC = () => {
         {activeTab === 'telemetry' && (
           <div className="space-y-6 animate-fade-in">
             
-            {/* AWS Connection Card */}
-            <div className="p-6 rounded-3xl bg-gradient-to-r from-slate-900 to-[#0F172A] border border-slate-800 shadow-xl space-y-4">
+            {/* AWS Connection Card (Light Style) */}
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-50 text-[#2563EB] flex items-center justify-center font-bold">
                     <Cloud className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="font-display font-extrabold text-base text-white">Live AWS Boto3 Integration Status</h3>
-                    <p className="text-xs text-slate-400">Connected to live AWS account hosting your instances and databases.</p>
+                    <h3 className="font-display font-extrabold text-base text-slate-900">Live AWS Boto3 Integration Status</h3>
+                    <p className="text-xs text-slate-500">Connected to live AWS account hosting your instances and databases.</p>
                   </div>
                 </div>
 
-                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span>Authenticated via Boto3</span>
                 </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2">
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Target Region</span>
-                  <div className="font-bold text-white text-sm mt-0.5">ap-south-2 (Hyderabad)</div>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Target Region</span>
+                  <div className="font-bold text-slate-900 text-sm mt-0.5">ap-south-2 (Hyderabad)</div>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">AWS Account ID</span>
-                  <div className="font-mono font-bold text-white text-sm mt-0.5">416384710566</div>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">AWS Account ID</span>
+                  <div className="font-mono font-bold text-slate-900 text-sm mt-0.5">416384710566</div>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">IAM Role Identity</span>
-                  <div className="font-mono font-bold text-white text-sm mt-0.5">terra-admin</div>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">IAM Role Identity</span>
+                  <div className="font-mono font-bold text-slate-900 text-sm mt-0.5">terra-admin</div>
                 </div>
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Live Discovered Assets</span>
-                  <div className="font-bold text-amber-400 text-sm mt-0.5">6 EC2 &bull; 1 RDS MySQL</div>
+                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 block">Live Discovered Assets</span>
+                  <div className="font-bold text-primary-blue text-sm mt-0.5">6 EC2 &bull; 1 RDS MySQL</div>
                 </div>
               </div>
             </div>
@@ -956,19 +1131,19 @@ export const AdminDashboardPage: React.FC = () => {
                 { agent: 'Agent 5: Risk Assessor', status: 'Healthy', target: 'Production Tag Guard', activeWorkers: 1 },
                 { agent: 'Agent 6: Exec Publisher', status: 'Healthy', target: 'ReportLab & Action Queue', activeWorkers: 1 },
               ]).map((ag, idx) => (
-                <div key={idx} className="p-5 rounded-3xl bg-[#0B1322] border border-slate-800 space-y-3 shadow-md">
+                <div key={idx} className="p-5 rounded-3xl bg-white border border-slate-200/90 space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-xs">{ag.agent}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                    <span className="font-bold text-slate-900 text-xs">{ag.agent}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                       {ag.status}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-400 font-mono">
+                  <div className="text-xs text-slate-600 font-mono">
                     Target: {ag.target}
                   </div>
-                  <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-800">
+                  <div className="text-[11px] text-slate-500 flex items-center justify-between pt-1 border-t border-slate-100">
                     <span>Active Workers: {ag.activeWorkers}</span>
-                    <span className="text-emerald-400 font-semibold">Latency &lt; 45ms</span>
+                    <span className="text-emerald-600 font-semibold">Latency &lt; 45ms</span>
                   </div>
                 </div>
               ))}
@@ -982,18 +1157,18 @@ export const AdminDashboardPage: React.FC = () => {
            ======================================================== */}
         {activeTab === 'logs' && (
           <div className="space-y-4 animate-fade-in">
-            <div className="bg-[#0B1322] rounded-3xl border border-slate-800 overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs">
+              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
                 <div>
-                  <h3 className="font-display font-extrabold text-sm text-white">System Execution Audit Trail</h3>
-                  <p className="text-xs text-slate-400">Timestamped multi-agent optimization runs from MySQL database.</p>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">System Execution Audit Trail</h3>
+                  <p className="text-xs text-slate-500">Timestamped multi-agent optimization runs from MySQL database.</p>
                 </div>
-                <span className="text-xs text-amber-400 font-bold">{systemLogs.length} Analysis Runs Logged</span>
+                <span className="text-xs text-[#2563EB] font-bold">{systemLogs.length} Analysis Runs Logged</span>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070D18] border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[10px]">
+                  <thead className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
                     <tr>
                       <th className="p-4">Run ID</th>
                       <th className="p-4">Status</th>
@@ -1003,19 +1178,19 @@ export const AdminDashboardPage: React.FC = () => {
                       <th className="p-4">Telemetry Details</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800/80">
+                  <tbody className="divide-y divide-slate-100">
                     {systemLogs.map(log => (
-                      <tr key={log.runId} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="p-4 font-mono font-bold text-amber-400">{log.runId}</td>
+                      <tr key={log.runId} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="p-4 font-mono font-bold text-primary-blue">{log.runId}</td>
                         <td className="p-4">
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                             {log.status}
                           </span>
                         </td>
-                        <td className="p-4 font-mono text-[11px] text-slate-300">{log.startedAt}</td>
-                        <td className="p-4 font-mono text-[11px] text-slate-400">{log.completedAt}</td>
-                        <td className="p-4 font-bold text-emerald-400">+${log.savingsUSD.toFixed(2)}/mo</td>
-                        <td className="p-4 text-slate-300 max-w-sm truncate">{log.details}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-600">{log.startedAt}</td>
+                        <td className="p-4 font-mono text-[11px] text-slate-500">{log.completedAt}</td>
+                        <td className="p-4 font-bold text-emerald-600">+${log.savingsUSD.toFixed(2)}/mo</td>
+                        <td className="p-4 text-slate-700 max-w-sm truncate">{log.details}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1042,7 +1217,7 @@ export const AdminDashboardPage: React.FC = () => {
                 ai: 'Basic Discovery Only',
                 support: 'Community Support',
                 badge: 'Exploration',
-                bg: 'bg-[#0B1322] border-slate-800',
+                bg: 'bg-white border-slate-200',
               },
               {
                 id: 'starter',
@@ -1055,7 +1230,7 @@ export const AdminDashboardPage: React.FC = () => {
                 ai: 'AI Rightsizing Proposals',
                 support: 'Standard Email Support',
                 badge: 'Growing Startups',
-                bg: 'bg-[#0B1322] border-blue-500/30 ring-1 ring-blue-500/20',
+                bg: 'bg-white border-blue-200 ring-1 ring-blue-100',
               },
               {
                 id: 'business',
@@ -1068,7 +1243,7 @@ export const AdminDashboardPage: React.FC = () => {
                 ai: 'Autonomous Actions & Audits',
                 support: 'Priority 24/7 Slack & Phone',
                 badge: 'Most Popular',
-                bg: 'bg-[#0B1322] border-amber-500/40 ring-2 ring-amber-500/20',
+                bg: 'bg-white border-amber-300 ring-2 ring-amber-100',
               },
               {
                 id: 'enterprise',
@@ -1081,48 +1256,48 @@ export const AdminDashboardPage: React.FC = () => {
                 ai: 'Custom FinOps LLM Models',
                 support: 'Dedicated FinOps Architect',
                 badge: 'Owner Tier',
-                bg: 'bg-[#0B1322] border-purple-500/30',
+                bg: 'bg-white border-purple-200',
               },
             ].map(tier => (
-              <div key={tier.id} className={`p-6 rounded-3xl border shadow-xl flex flex-col justify-between space-y-6 ${tier.bg}`}>
+              <div key={tier.id} className={`p-6 rounded-3xl border shadow-2xs flex flex-col justify-between space-y-6 ${tier.bg}`}>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="font-display font-extrabold text-base text-white">{tier.name}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold">
+                    <span className="font-display font-extrabold text-base text-slate-900">{tier.name}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
                       {tier.badge}
                     </span>
                   </div>
 
                   <div>
-                    <div className="font-display font-extrabold text-3xl text-amber-400">{tier.price}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">{tier.period}</div>
+                    <div className="font-display font-extrabold text-3xl text-slate-900">{tier.price}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{tier.period}</div>
                   </div>
 
-                  <div className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
+                  <div className="space-y-2.5 text-xs text-slate-600 pt-2 border-t border-slate-100">
                     <div className="flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{tier.accounts}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{tier.regions}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{tier.resources}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{tier.ai}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Check className="w-3.5 h-3.5 text-amber-400" />
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>{tier.support}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 text-center text-[10px] text-slate-500">
+                <div className="pt-2 text-center text-[10px] text-slate-400 font-semibold">
                   Configured in MySQL Plan Guard
                 </div>
               </div>
@@ -1133,33 +1308,259 @@ export const AdminDashboardPage: React.FC = () => {
       </div>
 
       {/* ========================================================
+          MODAL: CREATE NEW ADMIN / STAFF USER
+         ======================================================== */}
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-primary-blue flex items-center justify-center font-bold">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">Create Platform Staff / Admin User</h3>
+                  <p className="text-xs text-slate-500">Add team members to manage Cloud Optimizer platform operations.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateUserModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Arjun Mehta"
+                  value={newUserForm.fullName}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, fullName: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Work Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="e.g. arjun@cloudoptimizer.io"
+                  value={newUserForm.email}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Platform Role Privileges *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'admin', label: 'Superadmin', desc: 'Full control over system' },
+                    { id: 'staff', label: 'Platform Staff', desc: 'Support & audit logs' },
+                    { id: 'user', label: 'Customer User', desc: 'Tenant level access' }
+                  ].map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setNewUserForm({ ...newUserForm, role: r.id as any })}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        newUserForm.role === r.id
+                          ? 'border-primary-blue bg-blue-50/70 text-slate-900 ring-2 ring-primary-blue/20'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{r.label}</div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">{r.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Temporary Password *</label>
+                <input
+                  type="text"
+                  required
+                  value={newUserForm.password}
+                  onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:outline-none focus:border-primary-blue"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Staff can change password in their profile settings.</span>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateUserModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="px-5 py-2 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-60"
+                >
+                  {creatingUser ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>Create User Account</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL: REGISTER NEW COMPANY TENANT
+         ======================================================== */}
+      {showCreateTenantModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">Register New Organization</h3>
+                  <p className="text-xs text-slate-500">Provision a new client tenant in MySQL database.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateTenantModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTenant} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Company / Organization Legal Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Apex Global Cloud"
+                  value={newTenantForm.name}
+                  onChange={(e) => setNewTenantForm({ ...newTenantForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-blue"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Subscription Plan Tier *</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['free', 'starter', 'business', 'enterprise'] as const).map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setNewTenantForm({ ...newTenantForm, plan: p })}
+                      className={`py-2 text-center rounded-xl border text-xs font-bold uppercase transition-all cursor-pointer ${
+                        newTenantForm.plan === p
+                          ? 'border-primary-blue bg-blue-50 text-[#2563EB] ring-2 ring-primary-blue/20'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Primary Owner Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ananya Sen"
+                    value={newTenantForm.ownerName}
+                    onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerName: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-blue"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Owner Work Email *</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. ananya@apexcloud.io"
+                    value={newTenantForm.ownerEmail}
+                    onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerEmail: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:border-primary-blue"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Initial Login Password *</label>
+                <input
+                  type="text"
+                  required
+                  value={newTenantForm.ownerPassword}
+                  onChange={(e) => setNewTenantForm({ ...newTenantForm, ownerPassword: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono focus:outline-none focus:border-primary-blue"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateTenantModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingTenant}
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-60"
+                >
+                  {creatingTenant ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Building2 className="w-3.5 h-3.5" />}
+                  <span>Register Organization</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
           MODAL: CHANGE TENANT PLAN
          ======================================================== */}
       {editingTenant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in">
-          <div className="bg-[#0B1322] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-700 space-y-5 text-white">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 text-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
-                <h3 className="font-display font-extrabold text-base text-white">Change Subscription Plan</h3>
-                <p className="text-xs text-slate-400">Instantly update customer tier in MySQL database.</p>
+                <h3 className="font-display font-extrabold text-base text-slate-900">Change Subscription Plan</h3>
+                <p className="text-xs text-slate-500">Instantly update customer tier in MySQL database.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditingTenant(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <div className="p-3.5 bg-slate-900 rounded-2xl border border-slate-800 space-y-1">
-                <div className="font-bold text-white text-sm">{editingTenant.name}</div>
-                <div className="text-xs text-slate-400 font-mono">{editingTenant.ownerEmail}</div>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                <div className="font-bold text-slate-900 text-sm">{editingTenant.name}</div>
+                <div className="text-xs text-slate-500 font-mono">{editingTenant.ownerEmail}</div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-2">Select Target Plan:</label>
+                <label className="text-xs font-bold text-slate-700 block mb-2">Select Target Plan:</label>
                 <div className="grid grid-cols-2 gap-2">
                   {(['free', 'starter', 'business', 'enterprise'] as const).map(p => (
                     <button
@@ -1168,12 +1569,12 @@ export const AdminDashboardPage: React.FC = () => {
                       onClick={() => setNewSelectedPlan(p)}
                       className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
                         newSelectedPlan === p
-                          ? 'border-amber-500 bg-amber-500/10 text-amber-300 font-bold ring-2 ring-amber-500/30'
-                          : 'border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-850'
+                          ? 'border-primary-blue bg-blue-50/70 text-slate-900 font-bold ring-2 ring-primary-blue/20'
+                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       <div className="uppercase text-xs font-extrabold">{p}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">
+                      <div className="text-[10px] text-slate-500 mt-0.5">
                         {p === 'free' ? '₹0/mo' : p === 'starter' ? '₹1,999/mo' : p === 'business' ? '₹5,999/mo' : 'Custom'}
                       </div>
                     </button>
@@ -1182,18 +1583,18 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setEditingTenant(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleSavePlanChange}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all shadow-md cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 Apply Plan in MySQL
               </button>
@@ -1206,17 +1607,17 @@ export const AdminDashboardPage: React.FC = () => {
           MODAL: RESET USER PASSWORD
          ======================================================== */}
       {resettingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-fade-in">
-          <div className="bg-[#0B1322] rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-700 space-y-5 text-white">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 text-slate-800">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
               <div>
-                <h3 className="font-display font-extrabold text-base text-white">Reset User Password</h3>
-                <p className="text-xs text-slate-400">Generate a new password for {resettingUser.email}.</p>
+                <h3 className="font-display font-extrabold text-base text-slate-900">Reset User Password</h3>
+                <p className="text-xs text-slate-500">Generate a new password for {resettingUser.email}.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setResettingUser(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1224,28 +1625,28 @@ export const AdminDashboardPage: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1">New Password *</label>
+                <label className="text-xs font-bold text-slate-700 block mb-1">New Password *</label>
                 <input
                   type="text"
                   value={newPasswordInput}
                   onChange={(e) => setNewPasswordInput(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono focus:outline-none focus:border-primary-blue"
                 />
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
+            <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setResettingUser(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleResetPassword}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
               >
                 Update Password
               </button>
