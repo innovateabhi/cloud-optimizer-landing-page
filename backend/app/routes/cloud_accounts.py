@@ -173,6 +173,13 @@ def initial_scan():
     data = request.get_json() or {}
     tenant_id = data.get('tenantId', 2)
 
+    # Run real multi-agent pipeline
+    try:
+        from app.analysis import run_analysis
+        run_analysis()
+    except Exception as e:
+        print("Live AWS scan notice:", e)
+
     conn = get_db_connection()
     cur = conn.cursor()
 

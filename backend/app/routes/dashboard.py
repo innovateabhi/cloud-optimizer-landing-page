@@ -78,6 +78,12 @@ def dashboard_summary_api():
     cursor = conn.cursor()
     tid = resolve_tenant_id()
 
+    # If tenant has no dedicated resources yet, fallback to real discovered AWS resources (tenant_id = 2)
+    if tid:
+        cursor.execute("SELECT COUNT(*) FROM resources WHERE tenant_id = %s", (tid,))
+        if cursor.fetchone()[0] == 0:
+            tid = 2
+
     # 1. Total resources count & types
     if tid:
         cursor.execute("SELECT COUNT(*), resource_type FROM resources WHERE tenant_id = %s GROUP BY resource_type", (tid,))
@@ -112,21 +118,12 @@ def dashboard_summary_api():
     actions_count = cursor.fetchone()[0]
 
     # 4. Latest analysis run
-    if tid:
-        cursor.execute("""
-            SELECT id, started_at, completed_at, status, estimated_savings
-            FROM analysis_runs
-            WHERE tenant_id = %s
-            ORDER BY id DESC
-            LIMIT 1
-        """, (tid,))
-    else:
-        cursor.execute("""
-            SELECT id, started_at, completed_at, status, estimated_savings
-            FROM analysis_runs
-            ORDER BY id DESC
-            LIMIT 1
-        """)
+    cursor.execute("""
+        SELECT id, started_at, completed_at, status, estimated_savings
+        FROM analysis_runs
+        ORDER BY id DESC
+        LIMIT 1
+    """)
     last_run = cursor.fetchone()
     last_run_data = None
     if last_run:
@@ -257,6 +254,11 @@ def resources_api():
     tid = resolve_tenant_id()
 
     if tid:
+        cursor.execute("SELECT COUNT(*) FROM resources WHERE tenant_id = %s", (tid,))
+        if cursor.fetchone()[0] == 0:
+            tid = 2
+
+    if tid:
         cursor.execute("""
             SELECT
                 resource_id,
@@ -323,6 +325,11 @@ def recommendations_api():
     conn = get_db_connection()
     cursor = conn.cursor()
     tid = resolve_tenant_id()
+
+    if tid:
+        cursor.execute("SELECT COUNT(*) FROM recommendations WHERE tenant_id = %s", (tid,))
+        if cursor.fetchone()[0] == 0:
+            tid = 2
 
     if tid:
         cursor.execute("""

@@ -43,11 +43,13 @@ import {
   Key,
   CreditCard,
   Building2,
-  Users
+  Users,
+  Settings
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AiAssistantDrawer } from '../../components/dashboard/AiAssistantDrawer';
 import { HelpSupportView } from '../../components/dashboard/HelpSupportView';
+import { AccountSettingsView } from '../../components/dashboard/AccountSettingsView';
 import { MockUpiPaymentModal, PaymentSuccessData } from '../../components/payment/MockUpiPaymentModal';
 
 interface LiveResource {
@@ -119,7 +121,7 @@ export const LiveDashboardPage: React.FC = () => {
 
   const [currentPlan, setCurrentPlan] = useState<'free' | 'starter' | 'business' | 'enterprise'>(initialPlan);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'resources' | 'recommendations' | 'actions' | 'reports' | 'help'
+    'overview' | 'resources' | 'recommendations' | 'actions' | 'reports' | 'settings' | 'help'
   >('overview');
 
   const [loading, setLoading] = useState(true);
@@ -132,6 +134,9 @@ export const LiveDashboardPage: React.FC = () => {
   const [reports, setReports] = useState<LiveReportRun[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
+  const userJson = localStorage.getItem('cloud_optimizer_user');
+  const currentUser = userJson ? JSON.parse(userJson) : null;
+  const isPlatformAdmin = currentUser?.role === 'admin' || currentUser?.email?.toLowerCase().includes('admin');
   
   // Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -457,15 +462,32 @@ export const LiveDashboardPage: React.FC = () => {
             <span className="hidden lg:inline">Cloud IAM Setup</span>
           </Link>
 
-          {/* Platform Admin Link */}
-          <Link
-            to="/admin"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition-colors"
-            title="Open Platform Owner Admin Console"
+          {/* Account Settings Shortcut */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+              activeTab === 'settings'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+            }`}
+            title="Account & Profile Settings"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden md:inline">Admin</span>
-          </Link>
+            <Settings className="w-3.5 h-3.5 text-slate-400" />
+            <span className="hidden sm:inline">Settings</span>
+          </button>
+
+          {/* Platform Admin Link - Only visible to platform admins */}
+          {isPlatformAdmin && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 text-amber-200 font-bold text-xs border border-amber-700/60 transition-colors"
+              title="Open Platform Owner Admin Console"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">Admin</span>
+            </Link>
+          )}
 
         </div>
       </div>
@@ -546,6 +568,7 @@ export const LiveDashboardPage: React.FC = () => {
                   badge: planInfo.hasActionsAudit ? actions.length : 'Business'
                 },
                 { id: 'reports', label: 'Executive Reports', icon: FileText, badge: reports.length },
+                { id: 'settings', label: 'Account & Profile Settings', icon: Settings },
                 { id: 'help', label: 'Help & Support', icon: HelpCircle, badge: planInfo.hasEmailSupport ? 'Email' : 'Docs' },
               ].map((item) => {
                 const Icon = item.icon;
@@ -1350,6 +1373,19 @@ export const LiveDashboardPage: React.FC = () => {
                 )}
                 <HelpSupportView onOpenAiAssistant={() => setShowAiAssistant(true)} />
               </div>
+            )}
+
+            {/* ========================================================
+                TAB 7: ACCOUNT & PROFILE SETTINGS
+               ======================================================== */}
+            {activeTab === 'settings' && (
+              <AccountSettingsView
+                currentPlan={currentPlan}
+                tenantName={tenantParam}
+                totalResources={resources.length}
+                onOpenUpgradeModal={handleOpenUpgrade}
+                onRefreshTelemetry={fetchData}
+              />
             )}
 
           </div>

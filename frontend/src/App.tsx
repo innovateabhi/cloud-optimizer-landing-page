@@ -13,6 +13,7 @@ import { DemoDashboardPage } from './pages/dashboard/DemoDashboardPage';
 import { LiveDashboardPage } from './pages/dashboard/LiveDashboardPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { SetupWizardPage } from './pages/onboarding/SetupWizardPage';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -41,16 +42,51 @@ export const App: React.FC = () => {
         {/* Interactive Demo Sandbox */}
         <Route path="/demo" element={<DemoDashboardPage />} />
 
-        {/* Real Production SaaS Dashboard (connected to Python backend + MySQL) */}
-        <Route path="/dashboard" element={<LiveDashboardPage />} />
-        <Route path="/app" element={<LiveDashboardPage />} />
+        {/* Real Production SaaS Dashboard (Protected by authentication) */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute>
+              <LiveDashboardPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/app" 
+          element={
+            <ProtectedRoute>
+              <LiveDashboardPage />
+            </ProtectedRoute>
+          } 
+        />
 
-        {/* Platform Owner / Superadmin Operations Dashboard */}
-        <Route path="/admin" element={<AdminDashboardPage />} />
+        {/* Platform Owner / Superadmin Dashboard (Strictly restricted to Admin role) */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute requireAdmin={true}>
+              <AdminDashboardPage />
+            </ProtectedRoute>
+          } 
+        />
 
         {/* Customer Cloud Account Setup Wizard (Post-Payment IAM Onboarding) */}
-        <Route path="/setup-wizard" element={<SetupWizardPage />} />
-        <Route path="/onboarding" element={<SetupWizardPage />} />
+        <Route 
+          path="/setup-wizard" 
+          element={
+            <ProtectedRoute>
+              <SetupWizardPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/onboarding" 
+          element={
+            <ProtectedRoute>
+              <SetupWizardPage />
+            </ProtectedRoute>
+          } 
+        />
 
         {/* Authentication Routes */}
         <Route path="/login" element={<LoginPage />} />

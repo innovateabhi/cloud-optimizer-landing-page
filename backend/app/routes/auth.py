@@ -290,3 +290,91 @@ def me():
         })
     finally:
         conn.close()
+
+@auth_bp.route('/profile/update', methods=['POST'])
+def update_profile():
+    data = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    full_name = data.get('fullName', '').strip()
+    org_name = data.get('organizationName', '').strip()
+
+    if not email:
+        return jsonify({'status': 'error', 'message': 'Email is required'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT tenant_id FROM users WHERE email = %s", (email,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({'status': 'error', 'message': 'User not found'}), 404
+
+        tid = row[0]
+        if full_name:
+            cur.execute("UPDATE users SET full_name = %s WHERE email = %s", (full_name, email))
+        if org_name:
+            cur.execute("UPDATE tenants SET name = %s WHERE id = %s", (org_name, tid))
+
+        conn.commit()
+        return jsonify({'status': 'success', 'message': 'Profile updated successfully'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@auth_bp.route('/profile/change-password', methods=['POST'])
+def change_password():
+    data = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    current_pw = data.get('currentPassword', '')
+    new_pw = data.get('newPassword', '')
+
+    if not email or not current_pw or not new_pw:
+        return jsonify({'status': 'error', 'message': 'All password fields are required'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur_hash = hash_pw(current_pw)
+        cur.execute("SELECT id FROM users WHERE email = %s AND password_hash = %s", (email, cur_hash))
+        if not cur.fetchone():
+            return jsonify({'status': 'error', 'message': 'Incorrect current password'}), 400
+
+        new_hash = hash_pw(new_pw)
+        cur.execute("UPDATE users SET password_hash = %s WHERE email = %s", (new_hash, email))
+        conn.commit()
+        return jsonify({'status': 'success', 'message': 'Password changed successfully'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@auth_bp.route('/profile/toggle-2fa', methods=['POST'])
+def toggle_2fa():
+    data = request.get_json() or {}
+    email = data.get('email', '').strip().lower()
+    enabled = data.get('enabled', False)
+
+    if not email:
+        return jsonify({'status': 'error', 'message': 'Email is required'}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("UPDATE users SET two_factor_enabled = %s WHERE email = %s", (bool(enabled), email))
+        conn.commit()
+        return jsonify({
+            'status': 'success',
+            'twoFactorEnabled': bool(enabled),
+            'message': f"Two-Factor Authentication {'enabled' if enabled else 'disabled'}"
+        })
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        conn.close()
