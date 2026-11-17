@@ -41,8 +41,8 @@ export const LoginPage: React.FC = () => {
     // Simulate auth check
     await new Promise((r) => setTimeout(r, 600));
 
-    // Phase 1 client-side auth redirection / demo access
-    navigate('/demo');
+    // Authenticated dashboard navigation
+    navigate('/dashboard');
   };
 
   return (

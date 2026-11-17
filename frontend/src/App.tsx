@@ -10,6 +10,7 @@ import { BookDemoPage } from './pages/marketing/BookDemoPage';
 import { PrivacyPolicyPage } from './pages/marketing/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/marketing/TermsOfServicePage';
 import { DemoDashboardPage } from './pages/dashboard/DemoDashboardPage';
+import { LiveDashboardPage } from './pages/dashboard/LiveDashboardPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -37,6 +38,10 @@ export const App: React.FC = () => {
 
         {/* Interactive Demo Sandbox */}
         <Route path="/demo" element={<DemoDashboardPage />} />
+
+        {/* Real Production SaaS Dashboard (connected to Python backend + MySQL) */}
+        <Route path="/dashboard" element={<LiveDashboardPage />} />
+        <Route path="/app" element={<LiveDashboardPage />} />
 
         {/* Authentication Routes */}
         <Route path="/login" element={<LoginPage />} />
