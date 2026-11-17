@@ -11,6 +11,7 @@ import { PrivacyPolicyPage } from './pages/marketing/PrivacyPolicyPage';
 import { TermsOfServicePage } from './pages/marketing/TermsOfServicePage';
 import { DemoDashboardPage } from './pages/dashboard/DemoDashboardPage';
 import { LiveDashboardPage } from './pages/dashboard/LiveDashboardPage';
+import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -42,6 +43,9 @@ export const App: React.FC = () => {
         {/* Real Production SaaS Dashboard (connected to Python backend + MySQL) */}
         <Route path="/dashboard" element={<LiveDashboardPage />} />
         <Route path="/app" element={<LiveDashboardPage />} />
+
+        {/* Platform Owner / Superadmin Operations Dashboard */}
+        <Route path="/admin" element={<AdminDashboardPage />} />
 
         {/* Authentication Routes */}
         <Route path="/login" element={<LoginPage />} />
