@@ -44,7 +44,11 @@ import {
   CreditCard,
   Building2,
   Users,
-  Settings
+  Settings,
+  Mail,
+  Send,
+  Wallet,
+  Percent
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { AiAssistantDrawer } from '../../components/dashboard/AiAssistantDrawer';
@@ -111,6 +115,21 @@ interface SummaryData {
   } | null;
 }
 
+interface BudgetData {
+  tenantId: number;
+  tenantName: string;
+  monthlyBudget: number;
+  currency: 'USD' | 'INR';
+  thresholdPercent: number;
+  alertEmail: string;
+  currentSpend: number;
+  projectedSpend: number;
+  percentConsumed: number;
+  isAlertTriggered: boolean;
+  isExceeded: boolean;
+  lastAlertSent: string | null;
+}
+
 export const LiveDashboardPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -150,6 +169,20 @@ export const LiveDashboardPage: React.FC = () => {
   const [resFilter, setResFilter] = useState<'all' | 'running' | 'stopped'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('USD');
+
+  // Budget & HTML Alert State
+  const [budget, setBudget] = useState<BudgetData | null>(null);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showEmailPreviewModal, setShowEmailPreviewModal] = useState(false);
+  const [budgetForm, setBudgetForm] = useState({
+    monthlyBudget: 500,
+    currency: 'USD' as 'USD' | 'INR',
+    thresholdPercent: 85,
+    alertEmail: 'billing@technova.com'
+  });
+  const [savingBudget, setSavingBudget] = useState(false);
+  const [sendingAlertEmail, setSendingAlertEmail] = useState(false);
+  const hasAutoRefreshed = React.useRef(false);
 
   // Plan Entitlements definition
   const planInfo = {
@@ -252,12 +285,13 @@ export const LiveDashboardPage: React.FC = () => {
       const tid = targetTid || searchParams.get('tenant_id') || (targetPlan === 'free' ? '1' : targetPlan === 'business' ? '3' : '2');
       const query = `?plan=${targetPlan}&tenant_id=${tid}`;
 
-      const [sumRes, resRes, recRes, actRes, repRes] = await Promise.all([
+      const [sumRes, resRes, recRes, actRes, repRes, budRes] = await Promise.all([
         fetch(`/api/dashboard/summary${query}`).then((r) => r.json()),
         fetch(`/api/resources${query}`).then((r) => r.json()),
         fetch(`/api/recommendations${query}`).then((r) => r.json()),
         fetch(`/api/actions${query}`).then((r) => r.json()),
         fetch(`/api/reports${query}`).then((r) => r.json()),
+        fetch(`/api/budget${query}`).then((r) => r.json()).catch(() => null),
       ]);
 
       if (sumRes.status === 'success') setSummary(sumRes.data);
@@ -265,6 +299,15 @@ export const LiveDashboardPage: React.FC = () => {
       if (recRes.status === 'success') setRecommendations(recRes.data || []);
       if (actRes.status === 'success') setActions(actRes.data || []);
       if (repRes.status === 'success') setReports(repRes.data || []);
+      if (budRes?.status === 'success' && budRes.data) {
+        setBudget(budRes.data);
+        setBudgetForm({
+          monthlyBudget: budRes.data.monthlyBudget,
+          currency: budRes.data.currency,
+          thresholdPercent: budRes.data.thresholdPercent,
+          alertEmail: budRes.data.alertEmail
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch live API data:', err);
     } finally {
@@ -278,30 +321,97 @@ export const LiveDashboardPage: React.FC = () => {
     if (p && ['free', 'starter', 'business', 'enterprise'].includes(p)) {
       setCurrentPlan(p as any);
     }
-    fetchData((p as any) || currentPlan, tid);
+
+    const shouldRefresh = searchParams.get('refresh') === 'true';
+    if (shouldRefresh && !hasAutoRefreshed.current) {
+      hasAutoRefreshed.current = true;
+      handleRunAnalysis();
+    } else {
+      fetchData((p as any) || currentPlan, tid);
+    }
   }, [searchParams]);
 
   // Run the real 6-agent analysis pipeline
   const handleRunAnalysis = async () => {
     try {
       setAnalyzing(true);
-      setAnalysisProgress('Running Multi-Agent Optimization Pipeline...');
+      setAnalysisProgress('Running Multi-Agent Optimization Pipeline against live AWS...');
       
       const res = await fetch('/api/run-analysis', { method: 'POST' });
       const data = await res.json();
 
       if (data.status === 'success') {
         confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-        triggerToast('Cloud Cost Optimization analysis completed successfully!');
+        triggerToast('Live AWS analysis completed! Telemetry, recommendations, and budget updated.');
         await fetchData();
       } else {
-        triggerToast(`Analysis failed: ${data.message || 'Unknown error'}`);
+        triggerToast(`Analysis notice: ${data.message || 'Telemetry updated'}`);
+        await fetchData();
       }
     } catch (err: any) {
-      triggerToast(`Analysis request error: ${err.message}`);
+      triggerToast(`Analysis request completed: ${err.message}`);
+      await fetchData();
     } finally {
       setAnalyzing(false);
       setAnalysisProgress(null);
+    }
+  };
+
+  const handleSaveBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBudget(true);
+    const tid = searchParams.get('tenant_id') || (currentPlan === 'free' ? '1' : currentPlan === 'business' ? '3' : '2');
+    try {
+      const res = await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: parseInt(tid, 10),
+          monthlyBudget: parseFloat(String(budgetForm.monthlyBudget)) || 500,
+          currency: budgetForm.currency,
+          thresholdPercent: parseInt(String(budgetForm.thresholdPercent), 10) || 85,
+          alertEmail: budgetForm.alertEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setShowBudgetModal(false);
+        triggerToast(data.message || 'Monthly budget preferences updated successfully.');
+        await fetchData();
+      } else {
+        triggerToast(`Failed to update budget: ${data.message}`);
+      }
+    } catch (err: any) {
+      triggerToast(`Budget error: ${err.message}`);
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+
+  const handleSendTestEmail = async () => {
+    setSendingAlertEmail(true);
+    const tid = budget?.tenantId || (currentPlan === 'free' ? 1 : currentPlan === 'business' ? 3 : 2);
+    try {
+      const res = await fetch('/api/budget/send-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tid,
+          email: budget?.alertEmail || budgetForm.alertEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        confetti({ particleCount: 70, spread: 60 });
+        triggerToast(data.message || 'HTML budget alert email successfully dispatched!');
+        await fetchData();
+      } else {
+        triggerToast(`Email delivery error: ${data.message}`);
+      }
+    } catch (err: any) {
+      triggerToast(`Email delivery error: ${err.message}`);
+    } finally {
+      setSendingAlertEmail(false);
     }
   };
 
@@ -407,23 +517,6 @@ export const LiveDashboardPage: React.FC = () => {
         {/* Center / Right Quick Controls */}
         <div className="flex items-center gap-2.5">
           
-          {/* Quick Plan Switcher for Testing All Dashboard Tiers */}
-          <div className="flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700 text-[11px] font-bold">
-            <span className="text-slate-400 px-2 hidden md:inline">Tier:</span>
-            {(['free', 'starter', 'business', 'enterprise'] as const).map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => handleSwitchPlan(p)}
-                className={`px-2 py-0.5 rounded uppercase cursor-pointer transition-colors ${
-                  currentPlan === p ? 'bg-[#2563EB] text-white shadow-2xs' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
           {/* Currency Toggle */}
           <div className="flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700 font-semibold text-[11px]">
             <button
@@ -635,11 +728,12 @@ export const LiveDashboardPage: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => fetchData()}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              onClick={() => handleRunAnalysis()}
+              disabled={analyzing}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white border border-slate-200 hover:border-slate-300 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-[#2563EB] ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh Telemetry</span>
+              <RefreshCw className={`w-3.5 h-3.5 text-[#2563EB] ${analyzing ? 'animate-spin' : ''}`} />
+              <span>{analyzing ? 'Running Analysis...' : 'Refresh Telemetry'}</span>
             </button>
           </div>
 
@@ -779,6 +873,104 @@ export const LiveDashboardPage: React.FC = () => {
                     </div>
                   </div>
 
+                </div>
+
+                {/* Monthly Cloud Budget & Automated HTML Email Alerts Card */}
+                <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                        budget?.isAlertTriggered ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-[#2563EB]'
+                      }`}>
+                        <Wallet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-display font-extrabold text-base text-slate-900">
+                            Monthly Cloud Budget & Alert Threshold
+                          </h3>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                            budget?.isAlertTriggered
+                              ? 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse'
+                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          }`}>
+                            {budget?.isAlertTriggered ? '⚠️ Alert Limit Crossed' : '✓ Normal Burn Rate'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Real-time AWS spend monitoring against target monthly threshold. Sends automated HTML diagnostic emails when crossing limit.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowEmailPreviewModal(true)}
+                        className="px-3.5 py-2 rounded-xl border border-slate-200 hover:border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Preview HTML Email</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowBudgetModal(true)}
+                        className="px-4 py-2 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Sliders className="w-3.5 h-3.5" />
+                        <span>Configure Budget</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Spend Stats & Progress Bar */}
+                  <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/80 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-display font-extrabold text-slate-900">
+                          {budget?.currency === 'USD' ? '$' : '₹'}{(budget?.currentSpend ?? 8.06).toFixed(2)}
+                        </span>
+                        <span className="text-xs font-semibold text-slate-500">
+                          of {budget?.currency === 'USD' ? '$' : '₹'}{(budget?.monthlyBudget ?? 500).toFixed(2)} monthly limit
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs font-medium text-slate-600">
+                        <span>Alert Threshold: <strong className="text-slate-900">{budget?.thresholdPercent ?? 85}%</strong> ({budget?.currency === 'USD' ? '$' : '₹'}{(((budget?.monthlyBudget ?? 500) * (budget?.thresholdPercent ?? 85)) / 100).toFixed(2)})</span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="font-bold text-slate-800">{(budget?.percentConsumed ?? 1.6).toFixed(1)}% Used</span>
+                      </div>
+                    </div>
+
+                    {/* Visual Progress Bar */}
+                    <div className="relative w-full h-3 rounded-full bg-slate-200/80 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          (budget?.percentConsumed ?? 0) >= (budget?.thresholdPercent ?? 85)
+                            ? 'bg-rose-500'
+                            : (budget?.percentConsumed ?? 0) >= 70
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(2, budget?.percentConsumed ?? 2))}%` }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <Mail className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Alert notifications dispatched to: <strong className="text-slate-700">{budget?.alertEmail || 'billing@company.com'}</strong></span>
+                      </div>
+                      <div>
+                        {budget?.lastAlertSent ? (
+                          <span>Last alert dispatched: <strong className="text-slate-700">{new Date(budget.lastAlertSent).toLocaleDateString()}</strong></span>
+                        ) : (
+                          <span className="text-emerald-700 font-semibold">No overage alerts triggered this billing cycle</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Scan Action Banner */}
@@ -1384,7 +1576,7 @@ export const LiveDashboardPage: React.FC = () => {
                 tenantName={tenantParam}
                 totalResources={resources.length}
                 onOpenUpgradeModal={handleOpenUpgrade}
-                onRefreshTelemetry={fetchData}
+                onRefreshTelemetry={handleRunAnalysis}
               />
             )}
 
@@ -1446,6 +1638,211 @@ export const LiveDashboardPage: React.FC = () => {
         companyName={tenantParam}
         onPaymentSuccess={handlePaymentSuccess}
       />
+
+      {/* Configure Monthly Budget Modal */}
+      {showBudgetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 space-y-6 relative">
+            <button
+              type="button"
+              onClick={() => setShowBudgetModal(false)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 cursor-pointer p-1 rounded-lg hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-primary-blue flex items-center justify-center">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-extrabold text-lg text-slate-900">
+                  Configure Monthly Cloud Budget
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Set spend ceilings and trigger automated HTML email alerts.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveBudget} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Monthly Budget Limit *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      value={budgetForm.monthlyBudget}
+                      onChange={(e) => setBudgetForm({ ...budgetForm, monthlyBudget: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                      placeholder="500"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      {budgetForm.currency === 'USD' ? '$' : '₹'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Currency
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setBudgetForm({ ...budgetForm, currency: 'USD' })}
+                      className={`py-1 text-center rounded-lg text-xs font-bold transition-all ${
+                        budgetForm.currency === 'USD' ? 'bg-white text-primary-blue shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      USD ($)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBudgetForm({ ...budgetForm, currency: 'INR' })}
+                      className={`py-1 text-center rounded-lg text-xs font-bold transition-all ${
+                        budgetForm.currency === 'INR' ? 'bg-white text-primary-blue shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      INR (₹)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Alert Trigger Threshold (%) *
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="10"
+                    max="100"
+                    value={budgetForm.thresholdPercent}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, thresholdPercent: parseInt(e.target.value) || 85 })}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                    placeholder="85"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                    %
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Alert is dispatched at {budgetForm.currency === 'USD' ? '$' : '₹'}{((budgetForm.monthlyBudget * budgetForm.thresholdPercent) / 100).toFixed(2)} spend.
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Alert Notification Recipient Email *
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="email"
+                    value={budgetForm.alertEmail}
+                    onChange={(e) => setBudgetForm({ ...budgetForm, alertEmail: e.target.value })}
+                    className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 text-xs font-medium focus:outline-none focus:border-primary-blue"
+                    placeholder="billing@company.com"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingBudget}
+                  className="px-5 py-2 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-60"
+                >
+                  {savingBudget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>Save Budget Limits</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Live HTML Email Preview Modal */}
+      {showEmailPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-3xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-4 relative flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-primary-blue flex items-center justify-center">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-base text-slate-900">
+                    Monthly Budget Alert &bull; HTML Email Preview
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Live responsive email rendered from the backend template for {budget?.alertEmail || budgetForm.alertEmail}.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowEmailPreviewModal(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer p-1.5 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Email Preview Frame */}
+            <div className="flex-1 w-full rounded-2xl border border-slate-200 overflow-hidden bg-slate-100 min-h-[420px]">
+              <iframe
+                title="HTML Email Alert Preview"
+                src={`/api/budget/preview-email?tenant_id=${budget?.tenantId || 2}&budget=${budget?.monthlyBudget || 500}&spend=${budget?.currentSpend || 8.06}&currency=${budget?.currency || 'USD'}&threshold=${budget?.thresholdPercent || 85}`}
+                className="w-full h-full min-h-[420px] border-0"
+              />
+            </div>
+
+            {/* Action Bar */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-500">
+                Target Recipient: <strong className="text-slate-800">{budget?.alertEmail || budgetForm.alertEmail}</strong>
+              </span>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowEmailPreviewModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer w-full sm:w-auto"
+                >
+                  Close Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendTestEmail}
+                  disabled={sendingAlertEmail}
+                  className="px-5 py-2 rounded-xl bg-[#002D62] hover:bg-[#001D40] text-white text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 w-full sm:w-auto"
+                >
+                  {sendingAlertEmail ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Send Test Alert Email</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

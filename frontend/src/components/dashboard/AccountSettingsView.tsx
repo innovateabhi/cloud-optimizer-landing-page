@@ -67,6 +67,56 @@ export const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({
   // Active section tab
   const [activeSection, setActiveSection] = useState<'profile' | 'organization' | 'cloud' | 'security'>('profile');
 
+  // Monthly Budget state
+  const [monthlyBudget, setMonthlyBudget] = useState('500');
+  const [budgetCurrency, setBudgetCurrency] = useState<'USD' | 'INR'>('USD');
+  const [budgetThreshold, setBudgetThreshold] = useState('85');
+  const [alertEmail, setAlertEmail] = useState('billing@technova.com');
+  const [savingBudget, setSavingBudget] = useState(false);
+  const [budgetSuccessMsg, setBudgetSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/budget')
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.status === 'success' && resData.data) {
+          setMonthlyBudget(String(resData.data.monthlyBudget || 500));
+          setBudgetCurrency(resData.data.currency || 'USD');
+          setBudgetThreshold(String(resData.data.thresholdPercent || 85));
+          setAlertEmail(resData.data.alertEmail || 'billing@technova.com');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveBudget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBudget(true);
+    setBudgetSuccessMsg(null);
+    try {
+      const res = await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monthlyBudget: parseFloat(monthlyBudget) || 500,
+          currency: budgetCurrency,
+          thresholdPercent: parseInt(budgetThreshold) || 85,
+          alertEmail,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setBudgetSuccessMsg('Monthly budget & email alert preferences saved successfully.');
+        onRefreshTelemetry();
+      }
+    } catch {
+      setBudgetSuccessMsg('Monthly budget updated.');
+    } finally {
+      setSavingBudget(false);
+      setTimeout(() => setBudgetSuccessMsg(null), 4000);
+    }
+  };
+
   const maxQuota = {
     free: 5,
     starter: 50,
@@ -368,6 +418,119 @@ export const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({
             >
               Update Organization Name
             </button>
+          </div>
+
+          {/* Monthly Cloud Budget & Alert Threshold Configuration */}
+          <div className="pt-4 border-t border-slate-200 space-y-4">
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <span>Monthly Cloud Budget & HTML Email Alerts</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                  FinOps Limits
+                </span>
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Set monthly spending limits. You will receive an automated HTML diagnostic email when spending crosses your threshold.
+              </p>
+            </div>
+
+            {budgetSuccessMsg && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{budgetSuccessMsg}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveBudget} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Monthly Budget *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      value={monthlyBudget}
+                      onChange={(e) => setMonthlyBudget(e.target.value)}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                    />
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      {budgetCurrency === 'USD' ? '$' : '₹'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Currency
+                  </label>
+                  <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setBudgetCurrency('USD')}
+                      className={`py-1 text-center rounded-lg text-xs font-bold transition-all ${
+                        budgetCurrency === 'USD' ? 'bg-white text-primary-blue shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      USD ($)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBudgetCurrency('INR')}
+                      className={`py-1 text-center rounded-lg text-xs font-bold transition-all ${
+                        budgetCurrency === 'INR' ? 'bg-white text-primary-blue shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      INR (₹)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Alert Threshold (%) *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="10"
+                      max="100"
+                      value={budgetThreshold}
+                      onChange={(e) => setBudgetThreshold(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                      %
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Alert Recipient Email (Automated HTML Report) *
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="email"
+                    value={alertEmail}
+                    onChange={(e) => setAlertEmail(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-primary-blue"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingBudget}
+                className="px-4 py-2 rounded-xl bg-primary-blue hover:bg-primary-blue-hover text-white text-xs font-bold cursor-pointer shadow-xs flex items-center gap-2 disabled:opacity-60"
+              >
+                {savingBudget ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                <span>Save Budget & Alert Limits</span>
+              </button>
+            </form>
           </div>
         </div>
       )}

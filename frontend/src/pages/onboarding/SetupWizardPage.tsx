@@ -42,6 +42,12 @@ export const SetupWizardPage: React.FC = () => {
   // Step 1: Account & Regions
   const [accountName, setAccountName] = useState(initialTenant);
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['ap-south-2']);
+
+  // Monthly Budget & Alert Email
+  const [monthlyBudget, setMonthlyBudget] = useState('500');
+  const [budgetCurrency, setBudgetCurrency] = useState<'USD' | 'INR'>('USD');
+  const [budgetThreshold, setBudgetThreshold] = useState('85');
+  const [alertEmail, setAlertEmail] = useState('billing@' + (initialTenant.toLowerCase().replace(/[^a-z0-9]/g, '') || 'company') + '.com');
   
   const availableRegions: RegionOption[] = [
     { id: 'ap-south-2', name: 'ap-south-2', location: 'Asia Pacific (Hyderabad)', isHost: true },
@@ -167,8 +173,21 @@ export const SetupWizardPage: React.FC = () => {
           regions: selectedRegions,
         }),
       });
+
+      // Save initial monthly budget
+      await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId,
+          monthlyBudget: parseFloat(monthlyBudget) || 500,
+          currency: budgetCurrency,
+          thresholdPercent: parseInt(budgetThreshold) || 85,
+          alertEmail,
+        }),
+      });
     } catch (err) {
-      console.warn('Connect notice:', err);
+      console.warn('Connect & Budget notice:', err);
     }
 
     setStep(3);
@@ -178,21 +197,27 @@ export const SetupWizardPage: React.FC = () => {
   const runLiveDiscoveryScan = async () => {
     setScanning(true);
     setScanProgress(20);
-    setScanStatusMessage('Agent 1: Discovering live EC2 instances & RDS databases via AWS Boto3...');
+    setScanStatusMessage('Agent 1 & 2: Discovering live EC2 instances & querying CloudWatch metrics via AWS Boto3...');
 
-    setTimeout(() => {
-      setScanProgress(50);
-      setScanStatusMessage('Agent 2: Querying CloudWatch CPU utilization & Disk IOPS metrics...');
-    }, 1200);
+    const tenantId = initialPlan === 'free' ? 1 : initialPlan === 'business' ? 3 : 2;
 
-    setTimeout(() => {
-      setScanProgress(75);
-      setScanStatusMessage('Agent 3 & 4: Calculating hourly on-demand pricing & waste rightsizing...');
-    }, 2400);
-
-    // Call real backend initial-scan endpoint
     try {
-      const tenantId = initialPlan === 'free' ? 1 : initialPlan === 'business' ? 3 : 2;
+      // 1. Run live multi-agent analysis on real AWS account
+      const analysisPromise = fetch('/api/run-analysis', { method: 'POST' });
+
+      setTimeout(() => {
+        setScanProgress(55);
+        setScanStatusMessage('Agent 3 & 4: Calculating hourly on-demand pricing & waste rightsizing...');
+      }, 1200);
+
+      setTimeout(() => {
+        setScanProgress(80);
+        setScanStatusMessage('Agent 5 & 6: Performing risk analysis & generating executive recommendations...');
+      }, 2500);
+
+      await analysisPromise;
+
+      // 2. Fetch fresh initial scan summary
       const res = await fetch('/api/cloud-accounts/initial-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -208,7 +233,8 @@ export const SetupWizardPage: React.FC = () => {
         savingsUSD: data.projectedSavingsUSD || 8.064,
       });
       confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
-    } catch {
+    } catch (err) {
+      console.error('Scan error:', err);
       setScanProgress(100);
       setScanning(false);
       setRealDiscoveredData({
@@ -225,7 +251,7 @@ export const SetupWizardPage: React.FC = () => {
     localStorage.setItem('cloud_optimizer_tenant', accountName);
     localStorage.setItem('cloud_optimizer_plan', initialPlan);
     localStorage.setItem('cloud_optimizer_tenant_id', tenantId);
-    navigate(`/dashboard?plan=${initialPlan}&tenant=${encodeURIComponent(accountName)}&tenant_id=${tenantId}`);
+    navigate(`/dashboard?plan=${initialPlan}&tenant=${encodeURIComponent(accountName)}&tenant_id=${tenantId}&refresh=true`);
   };
 
   return (
@@ -360,6 +386,104 @@ export const SetupWizardPage: React.FC = () => {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Monthly Cloud Budget & Alert Email Settings */}
+              <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/50 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-primary-blue text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                      $
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-text-primary">Monthly Cloud Budget & Alert Limits</h4>
+                      <p className="text-[11px] text-text-secondary">Get automated HTML email notifications whenever monthly AWS usage crosses your target threshold.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Monthly Budget Limit *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        value={monthlyBudget}
+                        onChange={(e) => setMonthlyBudget(e.target.value)}
+                        className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                        placeholder="500"
+                      />
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        {budgetCurrency === 'USD' ? '$' : '₹'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Currency
+                    </label>
+                    <div className="grid grid-cols-2 gap-1 bg-white p-1 rounded-lg border border-slate-300">
+                      <button
+                        type="button"
+                        onClick={() => setBudgetCurrency('USD')}
+                        className={`py-1 text-center rounded text-xs font-bold transition-all ${
+                          budgetCurrency === 'USD' ? 'bg-primary-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        USD ($)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBudgetCurrency('INR')}
+                        className={`py-1 text-center rounded text-xs font-bold transition-all ${
+                          budgetCurrency === 'INR' ? 'bg-primary-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        INR (₹)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Alert Threshold (%) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="10"
+                        max="100"
+                        value={budgetThreshold}
+                        onChange={(e) => setBudgetThreshold(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:border-primary-blue"
+                        placeholder="85"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">
+                        %
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Alert Recipient Email (Automated Monthly HTML Report) *
+                  </label>
+                  <input
+                    type="email"
+                    value={alertEmail}
+                    onChange={(e) => setAlertEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium focus:outline-none focus:border-primary-blue"
+                    placeholder="billing@company.com"
+                  />
+                  <span className="text-[10px] text-slate-500 mt-1 block">
+                    Our multi-agent system monitors your burn-rate and sends a branded HTML diagnostic alert email before surprise overages occur.
+                  </span>
                 </div>
               </div>
             </div>
