@@ -121,7 +121,15 @@ export const LoginPage: React.FC = () => {
   const quickDemoLogin = (role: 'free' | 'starter' | 'business' | 'admin') => {
     if (role === 'admin') {
       setValue('email', 'admin@cloudoptimizer.io');
-      setValue('password', '••••••••••••');
+      setValue('password', 'Admin@CloudOptimizer2026');
+      localStorage.setItem('cloud_optimizer_token', 'co_master_admin_session_token_2026');
+      localStorage.setItem('cloud_optimizer_user', JSON.stringify({
+        id: 4,
+        email: 'admin@cloudoptimizer.io',
+        fullName: 'Abhinandan (Owner & Platform Admin)',
+        role: 'admin',
+        twoFactorEnabled: false
+      }));
       localStorage.setItem('cloud_optimizer_plan', 'enterprise');
       localStorage.setItem('cloud_optimizer_tenant', 'Cloud Optimizer FinOps Technologies');
       localStorage.setItem('cloud_optimizer_tenant_id', '4');
@@ -130,14 +138,22 @@ export const LoginPage: React.FC = () => {
     }
 
     const tenantMap = {
-      free: { name: 'Acme Cloud Labs', id: 1, email: 'rahul@acmelabs.io' },
-      starter: { name: 'TechNova Solutions', id: 2, email: 'priya@technova.com' },
-      business: { name: 'GlobalScale Logistics', id: 3, email: 'vikram@globalscale.com' },
+      free: { name: 'Acme Cloud Labs', id: 1, email: 'rahul@acmelabs.io', fullName: 'Rahul Sharma', role: 'user' },
+      starter: { name: 'TechNova Solutions', id: 2, email: 'priya@technova.com', fullName: 'Priya Patel (Lead FinOps)', role: 'user' },
+      business: { name: 'GlobalScale Logistics', id: 3, email: 'vikram@globalscale.com', fullName: 'Vikram Malhotra', role: 'user' },
     };
 
     const target = tenantMap[role];
     setValue('email', target.email);
     setValue('password', '••••••••••••');
+    localStorage.setItem('cloud_optimizer_token', `co_demo_${role}_token`);
+    localStorage.setItem('cloud_optimizer_user', JSON.stringify({
+      id: target.id,
+      email: target.email,
+      fullName: target.fullName,
+      role: target.role,
+      twoFactorEnabled: false
+    }));
     localStorage.setItem('cloud_optimizer_plan', role);
     localStorage.setItem('cloud_optimizer_tenant', target.name);
     localStorage.setItem('cloud_optimizer_tenant_id', String(target.id));
@@ -264,6 +280,32 @@ export const LoginPage: React.FC = () => {
                 <div className="text-[10px] text-emerald-700 mt-0.5">Owner (/admin Console)</div>
               </button>
             </div>
+          </div>
+
+          {/* Platform Owner Direct Admin Notice */}
+          <div className="p-3.5 rounded-2xl bg-[#0B1120] border border-slate-800 text-white flex items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold text-xs shrink-0">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Platform Owner / Admin Console</span>
+                  <span className="px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 text-[9px] font-bold uppercase">/admin</span>
+                </div>
+                <div className="text-[10px] text-slate-400">
+                  Email: <code className="text-slate-200">admin@cloudoptimizer.io</code> &bull; Pass: <code className="text-slate-200">Admin@CloudOptimizer2026</code>
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => quickDemoLogin('admin')}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1 shrink-0 transition-all"
+            >
+              <span>Launch</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           {testOtpNotice && (

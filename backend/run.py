@@ -12,11 +12,13 @@ def create_app():
     from app.routes.auth import auth_bp
     from app.routes.cloud_accounts import cloud_accounts_bp
     from app.routes.budget import budget_bp
+    from app.routes.admin import admin_bp
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(cloud_accounts_bp)
     app.register_blueprint(budget_bp)
+    app.register_blueprint(admin_bp)
 
     return app
 
