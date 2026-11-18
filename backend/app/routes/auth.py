@@ -27,9 +27,42 @@ def register():
 
     try:
         # Check if user already exists
-        cur.execute("SELECT id FROM users WHERE email = %s", (email,))
-        if cur.fetchone():
-            return jsonify({'status': 'error', 'message': 'An account with this email already exists'}), 400
+        cur.execute("SELECT id, tenant_id, password_hash, full_name, role FROM users WHERE email = %s", (email,))
+        existing_user = cur.fetchone()
+        if existing_user:
+            pw_hash = hash_pw(password)
+            if existing_user[2] == pw_hash:
+                # Password matches existing account: log in seamlessly and proceed
+                cur.execute("SELECT id, name, plan, status, setup_completed FROM tenants WHERE id = %s", (existing_user[1],))
+                existing_tenant = cur.fetchone()
+                token = f"co_{uuid.uuid4().hex}"
+                tenant_id = existing_tenant[0] if existing_tenant else existing_user[1]
+                tenant_name = existing_tenant[1] if existing_tenant else org_name
+                tenant_plan = existing_tenant[2] if existing_tenant else plan
+                setup_done = bool(existing_tenant[4]) if existing_tenant else False
+
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Account already exists. Signed in successfully.',
+                    'token': token,
+                    'user': {
+                        'id': existing_user[0],
+                        'email': email,
+                        'fullName': existing_user[3],
+                        'role': existing_user[4],
+                        'twoFactorEnabled': False
+                    },
+                    'tenant': {
+                        'id': tenant_id,
+                        'name': tenant_name,
+                        'plan': tenant_plan,
+                        'status': 'active',
+                        'setupCompleted': setup_done
+                    },
+                    'needsSetup': not setup_done
+                }), 200
+            else:
+                return jsonify({'status': 'error', 'message': 'An account with this email already exists. Please log in with your password or use a different email.'}), 400
 
         # Create Tenant
         cur.execute("""

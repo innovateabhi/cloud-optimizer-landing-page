@@ -14,7 +14,15 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const token = localStorage.getItem('cloud_optimizer_token');
   const userJson = localStorage.getItem('cloud_optimizer_user');
-  const user = userJson ? JSON.parse(userJson) : null;
+  let user: any = null;
+  if (userJson) {
+    try {
+      user = JSON.parse(userJson);
+    } catch {
+      // Graceful fallback for non-JSON user strings from legacy sessions
+      user = { fullName: userJson, email: '', role: 'user' };
+    }
+  }
 
   // 1. Unauthenticated check
   if (!token && !user) {

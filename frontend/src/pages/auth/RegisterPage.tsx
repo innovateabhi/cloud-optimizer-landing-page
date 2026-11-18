@@ -16,7 +16,8 @@ import {
   QrCode,
   Zap,
   Layers,
-  Sprout
+  Sprout,
+  AlertCircle
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CloudOptimizerLogo } from '../../components/ui/CloudOptimizerLogo';
@@ -41,6 +42,7 @@ export const RegisterPage: React.FC = () => {
   // SBI Mock UPI Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingRegistration, setPendingRegistration] = useState<RegisterFormData | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
 
   const {
     register,
@@ -90,6 +92,8 @@ export const RegisterPage: React.FC = () => {
   };
 
   const onSubmit = async (data: RegisterFormData) => {
+    setServerError(null);
+
     // If Free plan: no payment required, immediate registration & proceed to setup wizard
     if (data.plan === 'free') {
       try {
@@ -99,19 +103,52 @@ export const RegisterPage: React.FC = () => {
           body: JSON.stringify(data),
         });
         const result = await res.json();
-        if (result.token) {
-          localStorage.setItem('cloud_optimizer_token', result.token);
-        }
-      } catch (err) {
-        console.warn('Register fallback:', err);
-      }
 
-      localStorage.setItem('cloud_optimizer_plan', 'free');
-      localStorage.setItem('cloud_optimizer_tenant', data.organizationName);
-      localStorage.setItem('cloud_optimizer_user', data.fullName);
-      confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
-      navigate(`/setup-wizard?plan=free&tenant=${encodeURIComponent(data.organizationName)}`);
-      return;
+        if (!res.ok && result.status === 'error') {
+          setServerError(result.message || 'Registration failed. Please try a different email or log in.');
+          return;
+        }
+
+        const userObj = result.user || {
+          id: 1,
+          email: data.workEmail,
+          fullName: data.fullName,
+          role: 'user',
+          twoFactorEnabled: false
+        };
+
+        const token = result.token || `co_free_token_${Date.now()}`;
+        const tenantId = String(result.tenant?.id || '1');
+        const tenantName = result.tenant?.name || data.organizationName;
+
+        localStorage.setItem('cloud_optimizer_token', token);
+        localStorage.setItem('cloud_optimizer_user', JSON.stringify(userObj));
+        localStorage.setItem('cloud_optimizer_plan', 'free');
+        localStorage.setItem('cloud_optimizer_tenant', tenantName);
+        localStorage.setItem('cloud_optimizer_tenant_id', tenantId);
+
+        confetti({ particleCount: 70, spread: 60, origin: { y: 0.6 } });
+        navigate(`/setup-wizard?plan=free&tenant=${encodeURIComponent(tenantName)}&tenant_id=${tenantId}`);
+        return;
+      } catch (err: any) {
+        console.warn('Register fallback:', err);
+        // Fallback for offline mode so user is never blocked
+        const fallbackUser = {
+          id: 1,
+          email: data.workEmail,
+          fullName: data.fullName,
+          role: 'user',
+          twoFactorEnabled: false
+        };
+        const token = `co_offline_free_${Date.now()}`;
+        localStorage.setItem('cloud_optimizer_token', token);
+        localStorage.setItem('cloud_optimizer_user', JSON.stringify(fallbackUser));
+        localStorage.setItem('cloud_optimizer_plan', 'free');
+        localStorage.setItem('cloud_optimizer_tenant', data.organizationName);
+        localStorage.setItem('cloud_optimizer_tenant_id', '1');
+        navigate(`/setup-wizard?plan=free&tenant=${encodeURIComponent(data.organizationName)}&tenant_id=1`);
+        return;
+      }
     }
 
     // For Starter & Business plans: open the Mock SBI UPI QR Payment Modal
@@ -122,26 +159,39 @@ export const RegisterPage: React.FC = () => {
   const handlePaymentSuccess = async (payment: PaymentSuccessData) => {
     setShowPaymentModal(false);
     if (pendingRegistration) {
+      let result: any = null;
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(pendingRegistration),
         });
-        const result = await res.json();
-        if (result.token) {
-          localStorage.setItem('cloud_optimizer_token', result.token);
-        }
+        result = await res.json();
       } catch (err) {
         console.warn('Register fallback:', err);
       }
 
+      const userObj = result?.user || {
+        id: Date.now(),
+        email: pendingRegistration.workEmail,
+        fullName: pendingRegistration.fullName,
+        role: 'user',
+        twoFactorEnabled: false
+      };
+
+      const token = result?.token || `co_paid_token_${Date.now()}`;
+      const tenantId = String(result?.tenant?.id || (pendingRegistration.plan === 'business' ? '3' : '2'));
+      const tenantName = result?.tenant?.name || pendingRegistration.organizationName;
+
+      localStorage.setItem('cloud_optimizer_token', token);
+      localStorage.setItem('cloud_optimizer_user', JSON.stringify(userObj));
       localStorage.setItem('cloud_optimizer_plan', pendingRegistration.plan);
-      localStorage.setItem('cloud_optimizer_tenant', pendingRegistration.organizationName);
-      localStorage.setItem('cloud_optimizer_user', pendingRegistration.fullName);
+      localStorage.setItem('cloud_optimizer_tenant', tenantName);
+      localStorage.setItem('cloud_optimizer_tenant_id', tenantId);
+
       confetti({ particleCount: 100, spread: 75, origin: { y: 0.6 } });
       // Directs to Cloud IAM Setup Wizard post payment
-      navigate(`/setup-wizard?plan=${pendingRegistration.plan}&tenant=${encodeURIComponent(pendingRegistration.organizationName)}&paid=true`);
+      navigate(`/setup-wizard?plan=${pendingRegistration.plan}&tenant=${encodeURIComponent(tenantName)}&tenant_id=${tenantId}&paid=true`);
     } else {
       navigate(`/setup-wizard?plan=${payment.planId}&paid=true`);
     }
@@ -268,6 +318,20 @@ export const RegisterPage: React.FC = () => {
               Select your plan and set up your cloud optimization tenant.
             </p>
           </div>
+
+          {serverError && (
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{serverError}</span>
+              </div>
+              {serverError.includes('already exists') && (
+                <Link to="/login" className="font-bold underline text-rose-900 shrink-0 hover:text-rose-950">
+                  Log In →
+                </Link>
+              )}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             

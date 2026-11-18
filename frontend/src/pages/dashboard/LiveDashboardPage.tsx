@@ -158,7 +158,14 @@ export const LiveDashboardPage: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAiAssistant, setShowAiAssistant] = useState(false);
   const userJson = localStorage.getItem('cloud_optimizer_user');
-  const currentUser = userJson ? JSON.parse(userJson) : null;
+  let currentUser: any = null;
+  if (userJson) {
+    try {
+      currentUser = JSON.parse(userJson);
+    } catch {
+      currentUser = { name: userJson, fullName: userJson, email: '', role: 'user' };
+    }
+  }
   const isPlatformAdmin = currentUser?.role === 'admin' || currentUser?.email?.toLowerCase().includes('admin');
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 

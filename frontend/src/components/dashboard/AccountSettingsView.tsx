@@ -42,7 +42,14 @@ export const AccountSettingsView: React.FC<AccountSettingsViewProps> = ({
 
   // User & Organization state
   const userJson = localStorage.getItem('cloud_optimizer_user');
-  const storedUser = userJson ? JSON.parse(userJson) : null;
+  let storedUser: any = null;
+  if (userJson) {
+    try {
+      storedUser = JSON.parse(userJson);
+    } catch {
+      storedUser = { fullName: userJson, email: '', role: 'user' };
+    }
+  }
 
   const [fullName, setFullName] = useState(storedUser?.fullName || 'Priya Patel');
   const [email] = useState(storedUser?.email || 'priya@technova.com');
