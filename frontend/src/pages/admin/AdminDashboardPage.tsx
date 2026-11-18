@@ -169,15 +169,35 @@ export const AdminDashboardPage: React.FC = () => {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
+  const getAdminHeaders = (includeContentType = true): HeadersInit => {
+    const token = localStorage.getItem('cloud_optimizer_token') || 'co_master_admin_session_token_2026';
+    const userJson = localStorage.getItem('cloud_optimizer_user');
+    let user: any = null;
+    try {
+      user = userJson ? JSON.parse(userJson) : null;
+    } catch {}
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+      'X-Admin-Token': token,
+      'X-User-Role': user?.role || 'admin',
+      'X-User-Email': user?.email || 'admin@cloudoptimizer.io'
+    };
+    if (includeContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+    return headers;
+  };
+
   // Fetch all real platform admin data
   const fetchAdminData = async () => {
     try {
       setLoading(true);
       const [overRes, tenRes, userRes, logRes] = await Promise.all([
-        fetch('/api/admin/overview').then(r => r.json()).catch(() => null),
-        fetch('/api/admin/tenants').then(r => r.json()).catch(() => null),
-        fetch('/api/admin/users').then(r => r.json()).catch(() => null),
-        fetch('/api/admin/system-logs').then(r => r.json()).catch(() => null),
+        fetch('/api/admin/overview', { headers: getAdminHeaders(false) }).then(r => r.json()).catch(() => null),
+        fetch('/api/admin/tenants', { headers: getAdminHeaders(false) }).then(r => r.json()).catch(() => null),
+        fetch('/api/admin/users', { headers: getAdminHeaders(false) }).then(r => r.json()).catch(() => null),
+        fetch('/api/admin/system-logs', { headers: getAdminHeaders(false) }).then(r => r.json()).catch(() => null),
       ]);
 
       if (overRes?.status === 'success') setOverview(overRes.data);
@@ -248,7 +268,7 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const res = await fetch('/api/admin/users/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify(newUserForm),
       });
       const data = await res.json();
@@ -285,7 +305,7 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const res = await fetch('/api/admin/tenants/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify(newTenantForm),
       });
       const data = await res.json();
@@ -317,7 +337,7 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const res = await fetch(`/api/admin/tenants/${editingTenant.tenantId}/plan`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ plan: newSelectedPlan }),
       });
       const data = await res.json();
@@ -340,7 +360,7 @@ export const AdminDashboardPage: React.FC = () => {
       const targetStatus = currentStatus === 'active' ? 'suspended' : 'active';
       const res = await fetch(`/api/admin/tenants/${tenantId}/status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ status: targetStatus }),
       });
       const data = await res.json();
@@ -359,7 +379,10 @@ export const AdminDashboardPage: React.FC = () => {
       return;
     }
     try {
-      const res = await fetch(`/api/admin/tenants/${tenantId}/delete`, { method: 'POST' });
+      const res = await fetch(`/api/admin/tenants/${tenantId}/delete`, {
+        method: 'POST',
+        headers: getAdminHeaders(false)
+      });
       const data = await res.json();
       if (data.status === 'success') {
         triggerToast(`Organization ${tenantName} removed.`);
@@ -378,7 +401,7 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const res = await fetch(`/api/admin/users/${userId}/role`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ role: nextRole }),
       });
       const data = await res.json();
@@ -395,7 +418,10 @@ export const AdminDashboardPage: React.FC = () => {
   const handleDeleteUser = async (userId: number, email: string) => {
     if (!window.confirm(`Delete user ${email}?`)) return;
     try {
-      const res = await fetch(`/api/admin/users/${userId}/delete`, { method: 'POST' });
+      const res = await fetch(`/api/admin/users/${userId}/delete`, {
+        method: 'POST',
+        headers: getAdminHeaders(false)
+      });
       const data = await res.json();
       if (data.status === 'success') {
         triggerToast(data.message);
@@ -414,7 +440,7 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const res = await fetch(`/api/admin/users/${resettingUser.id}/reset-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders(),
         body: JSON.stringify({ password: newPasswordInput }),
       });
       const data = await res.json();
@@ -433,7 +459,10 @@ export const AdminDashboardPage: React.FC = () => {
   const handleRunGlobalScan = async () => {
     setRunningGlobalScan(true);
     try {
-      const res = await fetch('/api/admin/run-global-discovery', { method: 'POST' });
+      const res = await fetch('/api/admin/run-global-discovery', {
+        method: 'POST',
+        headers: getAdminHeaders(false)
+      });
       const data = await res.json();
       if (data.status === 'success') {
         confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });

@@ -13,9 +13,9 @@ def hash_pw(pw: str) -> str:
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json() or {}
-    full_name = data.get('fullName', '').strip()
-    email = data.get('workEmail', '').strip().lower()
-    org_name = data.get('organizationName', '').strip()
+    full_name = (data.get('fullName') or data.get('name') or '').strip()
+    email = (data.get('workEmail') or data.get('email') or '').strip().lower()
+    org_name = (data.get('organizationName') or data.get('companyName') or data.get('tenantName') or '').strip()
     password = data.get('password', '')
     plan = data.get('plan', 'starter').lower()
 

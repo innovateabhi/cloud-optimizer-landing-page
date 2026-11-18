@@ -162,7 +162,7 @@ def approve_recommendation_api(rec_id):
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT resource_id, recommendation_type, recommendation, risk_level, estimated_savings
+        SELECT resource_id, recommendation_type, recommendation, risk_level, estimated_savings, tenant_id
         FROM recommendations
         WHERE id = %s
     """, (rec_id,))
@@ -173,13 +173,13 @@ def approve_recommendation_api(rec_id):
         conn.close()
         return jsonify({"status": "error", "message": "Recommendation not found"}), 404
 
-    resource_id, rec_type, reason, risk, savings = rec
+    resource_id, rec_type, reason, risk, savings, tid = rec
 
-    # Queue in actions table
+    # Queue in actions table with tenant isolation
     cursor.execute("""
-        INSERT INTO actions (resource_id, action_type, action_status, reason, risk_level, created_at)
-        VALUES (%s, %s, 'approved', %s, %s, CURRENT_TIMESTAMP)
-    """, (resource_id, rec_type, reason, risk))
+        INSERT INTO actions (resource_id, action_type, action_status, reason, risk_level, tenant_id, created_at)
+        VALUES (%s, %s, 'approved', %s, %s, %s, CURRENT_TIMESTAMP)
+    """, (resource_id, rec_type, reason, risk, tid or 2))
 
     # Mark recommendation as approved
     cursor.execute("UPDATE recommendations SET status = 'approved' WHERE id = %s", (rec_id,))
@@ -253,6 +253,24 @@ def resources_api():
     cursor = conn.cursor()
     tid = resolve_tenant_id()
 
+    # Determine tenant plan to enforce resource limits
+    plan = request.args.get("plan", "").lower()
+    if tid and not plan:
+        cursor.execute("SELECT plan FROM tenants WHERE id = %s", (tid,))
+        t_row = cursor.fetchone()
+        if t_row and t_row[0]:
+            plan = t_row[0].lower()
+
+    max_resources = 500
+    if plan == "free":
+        max_resources = 5
+    elif plan == "starter":
+        max_resources = 50
+    elif plan == "business":
+        max_resources = 500
+    elif plan == "enterprise":
+        max_resources = 10000
+
     if tid:
         cursor.execute("SELECT COUNT(*) FROM resources WHERE tenant_id = %s", (tid,))
         if cursor.fetchone()[0] == 0:
@@ -271,7 +289,8 @@ def resources_api():
             FROM resources
             WHERE tenant_id = %s
             ORDER BY resource_type, resource_id
-        """, (tid,))
+            LIMIT %s
+        """, (tid, max_resources))
     else:
         cursor.execute("""
             SELECT
@@ -284,7 +303,8 @@ def resources_api():
                 last_seen_at
             FROM resources
             ORDER BY resource_type, resource_id
-        """)
+            LIMIT %s
+        """, (max_resources,))
 
     rows = cursor.fetchall()
 
