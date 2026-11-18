@@ -478,49 +478,64 @@ export const AdminDashboardPage: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================
-          LIGHT-THEMED TOP BAR FOR PLATFORM OWNER
+          LIGHT-THEMED TOP BAR FOR PLATFORM OWNER (PREMIUM EXECUTIVE)
          ======================================================== */}
-      <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 sm:px-6 py-3 text-xs flex flex-wrap items-center justify-between gap-3 shadow-2xs shrink-0">
+      <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.03)] shrink-0">
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           <Link to="/" className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity">
             <CloudOptimizerLogo size="sm" />
-            <span className="px-2 py-0.5 rounded-full bg-blue-50 text-[#2563EB] border border-blue-200 text-[10px] font-black uppercase tracking-wider">
-              Platform Superadmin
-            </span>
           </Link>
 
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-300 hidden sm:inline" />
-          
-          <div className="items-center gap-2 text-slate-500 font-medium text-[11px] hidden lg:flex">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>MySQL 8.x Live &bull; AWS ap-south-2 Multi-Tenant Cluster</span>
+          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
+
+          {/* Luxury Superadmin Pill */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300/80 shadow-2xs">
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+            <span className="font-extrabold text-xs text-amber-950 tracking-tight">Superadmin Console</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-2xs">
+              Founder Mode
+            </span>
+          </div>
+
+          <div className="items-center gap-2 px-3 py-1 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 font-medium text-[11px] hidden xl:flex">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span>MySQL 8.x Live &bull; AWS ap-south-2 Multi-Tenant</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Refresh Data */}
           <button
             type="button"
             onClick={fetchAdminData}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+            title="Refresh tenants, users, and telemetry data"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-primary-blue ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh Data</span>
+            <span className="hidden sm:inline">Refresh Sync</span>
           </button>
 
+          {/* Open Customer View */}
           <Link
             to="/dashboard?plan=business"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#2563EB] border border-blue-200 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100 text-[#2563EB] border border-blue-200 font-bold text-xs transition-all shadow-2xs cursor-pointer"
+            title="Switch to customer dashboard preview"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Open Customer View</span>
+            <span>Customer View</span>
           </Link>
 
+          {/* Sign Out */}
           <button
             type="button"
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50/80 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition-all shadow-2xs cursor-pointer"
+            title="Sign out of Admin Session"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Sign Out</span>

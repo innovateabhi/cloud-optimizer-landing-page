@@ -48,9 +48,13 @@ import {
   Mail,
   Send,
   Wallet,
-  Percent
+  Percent,
+  LogOut,
+  User,
+  ChevronDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CloudOptimizerLogo } from '../../components/ui/CloudOptimizerLogo';
 import { AiAssistantDrawer } from '../../components/dashboard/AiAssistantDrawer';
 import { HelpSupportView } from '../../components/dashboard/HelpSupportView';
 import { AccountSettingsView } from '../../components/dashboard/AccountSettingsView';
@@ -156,6 +160,13 @@ export const LiveDashboardPage: React.FC = () => {
   const userJson = localStorage.getItem('cloud_optimizer_user');
   const currentUser = userJson ? JSON.parse(userJson) : null;
   const isPlatformAdmin = currentUser?.role === 'admin' || currentUser?.email?.toLowerCase().includes('admin');
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const handleLogout = () => {
+    localStorage.removeItem('cloud_optimizer_user');
+    localStorage.removeItem('cloud_optimizer_token');
+    navigate('/login');
+  };
   
   // Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -460,130 +471,187 @@ export const LiveDashboardPage: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================
-          TOP APP HEADER & PLAN STATUS BAR
+          TOP APP HEADER & PLAN STATUS BAR (PREMIUM LIGHT GLASSMORPHIC)
          ======================================================== */}
-      <div className="sticky top-0 z-50 bg-[#0F172A] text-white px-4 sm:px-6 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shrink-0 shadow-md">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.03)] shrink-0">
         
-        <div className="flex items-center gap-3">
+        {/* Left: Brand Logo & Workspace Pill */}
+        <div className="flex items-center gap-3.5">
           <Link to="/" className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity">
-            <div className="relative flex shrink-0 items-center justify-center rounded-xl bg-[#2563EB] shadow-xs h-8 w-8">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path 
-                  d="M10 22C6.68629 22 4 19.3137 4 16C4 12.9863 6.22271 10.4907 9.15587 10.0667C9.69747 6.6436 12.656 4 16.2857 4C20.3703 4 23.7317 7.15857 24.0322 11.238C26.3142 11.8344 28 13.9189 28 16.4C28 19.4928 25.4928 22 22.4 22H10Z" 
-                  fill="white" 
-                  fillOpacity="0.22" 
-                  stroke="white" 
-                  strokeWidth="2" 
-                  strokeLinejoin="round" 
-                />
-                <path 
-                  d="M16 19V11M16 11L12.5 14.5M16 11L19.5 14.5" 
-                  stroke="white" 
-                  strokeWidth="2.2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                />
-              </svg>
-            </div>
-            <div className="leading-none">
-              <span className="font-display font-extrabold text-base tracking-tight text-white drop-shadow-sm">
-                Cloud<span className="text-[#38BDF8]">Optimizer</span>
-              </span>
-            </div>
+            <CloudOptimizerLogo size="sm" />
           </Link>
 
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 hidden sm:inline" />
+          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
-          {/* Current Plan Badge */}
-          <div className="flex items-center gap-2">
-            <span className={`px-2.5 py-0.5 rounded-full font-extrabold text-[11px] uppercase tracking-wide border ${planInfo.badgeStyle}`}>
-              {planInfo.badge}
+          {/* Active Workspace & Plan Tag */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200/90 shadow-2xs">
+            <Building2 className="w-3.5 h-3.5 text-slate-400" />
+            <span className="font-bold text-xs text-slate-900 max-w-[140px] truncate" title={tenantParam}>
+              {tenantParam}
             </span>
-
-            {/* Quick Upgrade CTA if Free or Starter */}
-            {currentPlan !== 'business' && currentPlan !== 'enterprise' && (
-              <button
-                type="button"
-                onClick={() => handleOpenUpgrade(currentPlan === 'free' ? 'starter' : 'business')}
-                className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold text-[10px] hover:opacity-90 shadow-2xs transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Upgrade with SBI UPI</span>
-              </button>
-            )}
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className={`px-2 py-0.5 rounded-full font-extrabold text-[10px] uppercase tracking-wider border ${planInfo.badgeStyle}`}>
+              {planInfo.name}
+            </span>
           </div>
         </div>
 
         {/* Center / Right Quick Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           
-          {/* Currency Toggle */}
-          <div className="flex items-center rounded-lg bg-slate-800 p-0.5 border border-slate-700 font-semibold text-[11px]">
+          {/* AWS Region Node */}
+          <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px] font-medium text-slate-600">
+            <Cloud className="w-3.5 h-3.5 text-blue-500" />
+            <span>AWS ap-south-2</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          </div>
+
+          {/* Currency Toggle (USD $ / INR ₹) */}
+          <div className="flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200/80 font-bold text-xs">
             <button
               type="button"
               onClick={() => setCurrency('USD')}
-              className={`px-2 py-0.5 rounded ${currency === 'USD' ? 'bg-[#2563EB] text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                currency === 'USD'
+                  ? 'bg-white text-slate-900 shadow-xs font-black'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="View metrics in USD ($)"
             >
               $
             </button>
             <button
               type="button"
               onClick={() => setCurrency('INR')}
-              className={`px-2 py-0.5 rounded ${currency === 'INR' ? 'bg-[#2563EB] text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                currency === 'INR'
+                  ? 'bg-white text-slate-900 shadow-xs font-black'
+              : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="View metrics in INR (₹)"
             >
               ₹
             </button>
           </div>
 
-          {/* AI Copilot Pill */}
+          {/* AI Copilot Drawer Trigger */}
           <button
             type="button"
             onClick={() => setShowAiAssistant(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 text-[#2563EB] border border-blue-200/80 font-bold text-xs shadow-2xs transition-all cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
             <span className="hidden sm:inline">AI Copilot</span>
           </button>
 
           {/* Cloud IAM / Setup Wizard Link */}
           <Link
             to={`/setup-wizard?plan=${currentPlan}&tenant=${encodeURIComponent(tenantParam)}`}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-950/60 hover:bg-blue-900/80 text-blue-200 font-bold text-xs border border-blue-700/50 transition-colors"
-            title="Configure Cloud IAM Credentials & 2FA"
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 font-semibold text-xs transition-colors"
+            title="Configure Cloud IAM Credentials & Multi-Region Setup"
           >
-            <Key className="w-3.5 h-3.5 text-blue-300" />
-            <span className="hidden lg:inline">Cloud IAM Setup</span>
+            <Key className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden xl:inline">Cloud IAM</span>
           </Link>
 
-          {/* Account Settings Shortcut */}
-          <button
-            type="button"
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-              activeTab === 'settings'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
-            }`}
-            title="Account & Profile Settings"
-          >
-            <Settings className="w-3.5 h-3.5 text-slate-400" />
-            <span className="hidden sm:inline">Settings</span>
-          </button>
-
-          {/* Platform Admin Link - Only visible to platform admins */}
+          {/* Platform Superadmin Link - Only for Admins */}
           {isPlatformAdmin && (
             <Link
               to="/admin"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 text-amber-200 font-bold text-xs border border-amber-700/60 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 border border-amber-300/80 font-bold text-xs transition-colors shadow-2xs"
               title="Open Platform Owner Admin Console"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden md:inline">Admin</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden md:inline">Admin Panel</span>
             </Link>
           )}
 
+          {/* User Profile Pill & Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 transition-all cursor-pointer shadow-2xs"
+            >
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-[11px] flex items-center justify-center shadow-xs">
+                {(currentUser?.name || tenantParam || 'CO').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="text-left hidden sm:block leading-tight">
+                <div className="font-bold text-xs text-slate-900 max-w-[100px] truncate">
+                  {currentUser?.name || tenantParam}
+                </div>
+                <div className="text-[10px] text-slate-400 capitalize truncate">
+                  {currentUser?.role || `${currentPlan} Tier`}
+                </div>
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {userMenuOpen && (
+              <div 
+                className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-slate-200/90 shadow-xl py-2 z-50 animate-in fade-in zoom-in-95"
+                onClick={() => setUserMenuOpen(false)}
+              >
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {currentUser?.name || tenantParam}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-mono truncate">
+                    {currentUser?.email || 'authenticated-cloud@org.in'}
+                  </p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${planInfo.badgeStyle}`}>
+                      {planInfo.name}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="py-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('settings')}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Account & Budget Settings</span>
+                  </button>
+                  <Link
+                    to={`/setup-wizard?plan=${currentPlan}&tenant=${encodeURIComponent(tenantParam)}`}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <Key className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Cloud IAM Credentials</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('help')}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Help & Support Center</span>
+                  </button>
+                </div>
+
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                    <span>Sign Out of Dashboard</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
-      </div>
+      </header>
 
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
@@ -601,7 +669,7 @@ export const LiveDashboardPage: React.FC = () => {
       <div className="flex flex-1 relative">
         
         {/* FIXED LEFT SIDEBAR */}
-        <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 hidden md:flex sticky top-[45px] h-[calc(100vh-45px)] overflow-y-auto z-30">
+        <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 hidden md:flex sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto z-30">
           
           <div className="p-4 space-y-5">
             
@@ -743,26 +811,35 @@ export const LiveDashboardPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto flex flex-col">
           
           {/* TOP CONTROLS & SUBHEADER */}
-          <header className="bg-white border-b border-slate-200/90 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20 shadow-2xs">
+          <header className="bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-16 z-20 shadow-2xs">
             
             <div className="flex items-center gap-2">
               <span className="font-display font-extrabold text-base text-slate-900 capitalize">
-                {activeTab === 'overview' && `${planInfo.name} &bull; Infrastructure Overview`}
+                {activeTab === 'overview' && `${planInfo.name} • Infrastructure Overview`}
                 {activeTab === 'resources' && 'Discovered Cloud Resource Inventory'}
                 {activeTab === 'recommendations' && 'AI Rightsizing & Governance Queue'}
                 {activeTab === 'actions' && 'Executed & Approved Actions Audit Trail'}
                 {activeTab === 'reports' && 'Executive PDF Reports & Analysis Logs'}
+                {activeTab === 'settings' && 'Account, Budget & Notification Settings'}
                 {activeTab === 'help' && 'Help & Technical Support Center'}
               </span>
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="text-xs text-slate-500">
-                AWS Region: <strong className="text-slate-800">ap-south-2</strong>
-              </div>
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              <div className="text-xs text-slate-500">
-                Active Tier: <strong className="text-blue-600 font-bold uppercase">{currentPlan}</strong>
+              <button
+                type="button"
+                onClick={() => handleRunAnalysis()}
+                disabled={analyzing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${analyzing ? 'animate-spin' : ''}`} />
+                <span>{analyzing ? 'Running Analysis...' : 'Refresh Telemetry'}</span>
+              </button>
+
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-300 hidden sm:inline" />
+
+              <div className="text-xs text-slate-500 hidden sm:block">
+                Region: <strong className="text-slate-800">ap-south-2</strong>
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { 
   X, 
   CheckCircle2, 
@@ -12,7 +13,8 @@ import {
   Loader2, 
   Building2,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -52,10 +54,35 @@ export const MockUpiPaymentModal: React.FC<MockUpiPaymentModalProps> = ({
   const [processing, setProcessing] = useState(false);
   const [paymentStep, setPaymentStep] = useState<'qr' | 'processing' | 'success'>('qr');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
-  const payeeUpi = 'cloudoptimizer@sbi';
-  const merchantName = 'Cloud Optimizer FinOps Technologies Pvt Ltd';
-  const bankName = 'State Bank of India (SBI Corporate Banking)';
+  const payeeUpi = 'cloudoptimizer@upi';
+  const merchantName = 'Cloud Optimizer FinOps Technologies';
+  const bankName = 'State Bank of India (SBI SmartPay)';
+  const upiUri = `upi://pay?pa=${payeeUpi}&pn=${encodeURIComponent(merchantName)}&am=${amountINR}&cu=INR&tn=${encodeURIComponent(planName + ' Subscription')}`;
+
+  // Generate 100% Genuine Scannable UPI QR Code
+  useEffect(() => {
+    let isMounted = true;
+    QRCode.toDataURL(upiUri, {
+      width: 280,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#002D62', // SBI Navy
+        light: '#FFFFFF',
+      },
+    })
+      .then((url) => {
+        if (isMounted) setQrCodeDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('QR code generation failed:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [upiUri]);
 
   // Countdown timer
   useEffect(() => {
@@ -227,75 +254,35 @@ export const MockUpiPaymentModal: React.FC<MockUpiPaymentModalProps> = ({
             {/* UPI QR Display Container */}
             <div className="p-4 rounded-3xl bg-slate-50 border border-slate-200/90 flex flex-col items-center justify-center space-y-3">
               
-              <div className="relative p-3 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                {/* Visual SVG QR Code */}
-                <svg className="w-48 h-48" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Outer Frame */}
-                  <rect width="200" height="200" fill="white" />
-                  
-                  {/* Position Markers (Top-Left, Top-Right, Bottom-Left) */}
-                  <rect x="15" y="15" width="45" height="45" rx="8" fill="#002D62" />
-                  <rect x="22" y="22" width="31" height="31" rx="4" fill="white" />
-                  <rect x="29" y="29" width="17" height="17" rx="2" fill="#002D62" />
-
-                  <rect x="140" y="15" width="45" height="45" rx="8" fill="#002D62" />
-                  <rect x="147" y="22" width="31" height="31" rx="4" fill="white" />
-                  <rect x="154" y="29" width="17" height="17" rx="2" fill="#002D62" />
-
-                  <rect x="15" y="140" width="45" height="45" rx="8" fill="#002D62" />
-                  <rect x="22" y="147" width="31" height="31" rx="4" fill="white" />
-                  <rect x="29" y="154" width="17" height="17" rx="2" fill="#002D62" />
-
-                  {/* Stylized QR Matrix Pattern */}
-                  <rect x="70" y="20" width="10" height="10" fill="#1E293B" />
-                  <rect x="90" y="20" width="10" height="10" fill="#1E293B" />
-                  <rect x="110" y="20" width="10" height="10" fill="#1E293B" />
-                  
-                  <rect x="70" y="40" width="20" height="10" fill="#1E293B" />
-                  <rect x="100" y="40" width="10" height="20" fill="#1E293B" />
-                  <rect x="120" y="40" width="10" height="10" fill="#1E293B" />
-
-                  <rect x="20" y="70" width="10" height="10" fill="#1E293B" />
-                  <rect x="40" y="70" width="20" height="10" fill="#1E293B" />
-                  <rect x="70" y="70" width="10" height="20" fill="#1E293B" />
-                  <rect x="90" y="70" width="20" height="10" fill="#1E293B" />
-                  <rect x="120" y="70" width="20" height="10" fill="#1E293B" />
-                  <rect x="150" y="70" width="10" height="20" fill="#1E293B" />
-                  <rect x="170" y="70" width="10" height="10" fill="#1E293B" />
-
-                  <rect x="30" y="90" width="10" height="20" fill="#1E293B" />
-                  <rect x="50" y="90" width="10" height="10" fill="#1E293B" />
-                  <rect x="110" y="90" width="20" height="10" fill="#1E293B" />
-                  <rect x="140" y="90" width="20" height="10" fill="#1E293B" />
-
-                  <rect x="20" y="120" width="20" height="10" fill="#1E293B" />
-                  <rect x="70" y="110" width="10" height="30" fill="#1E293B" />
-                  <rect x="90" y="110" width="20" height="10" fill="#1E293B" />
-                  <rect x="120" y="110" width="10" height="20" fill="#1E293B" />
-                  <rect x="140" y="120" width="20" height="10" fill="#1E293B" />
-                  <rect x="170" y="110" width="10" height="30" fill="#1E293B" />
-
-                  <rect x="70" y="150" width="20" height="10" fill="#1E293B" />
-                  <rect x="100" y="140" width="10" height="20" fill="#1E293B" />
-                  <rect x="120" y="150" width="20" height="20" fill="#1E293B" />
-                  <rect x="150" y="150" width="10" height="10" fill="#1E293B" />
-                  <rect x="170" y="150" width="10" height="20" fill="#1E293B" />
-
-                  <rect x="70" y="170" width="10" height="10" fill="#1E293B" />
-                  <rect x="90" y="170" width="20" height="10" fill="#1E293B" />
-                  <rect x="140" y="170" width="20" height="10" fill="#1E293B" />
-
-                  {/* Center Badge for SBI */}
-                  <circle cx="100" cy="100" r="18" fill="white" stroke="#002D62" strokeWidth="2.5" />
-                  <text x="100" y="104" textAnchor="middle" fill="#002D62" fontSize="9" fontWeight="900" fontFamily="sans-serif">SBI</text>
-                </svg>
+              <div className="relative p-3 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center justify-center min-w-[210px] min-h-[210px]">
+                {qrCodeDataUrl ? (
+                  <img 
+                    src={qrCodeDataUrl} 
+                    alt="Scan UPI QR Code (cloudoptimizer@upi)" 
+                    className="w-48 h-48 rounded-xl object-contain shadow-2xs"
+                  />
+                ) : (
+                  <div className="w-48 h-48 flex items-center justify-center bg-slate-50 rounded-xl">
+                    <Loader2 className="w-8 h-8 text-primary-blue animate-spin" />
+                  </div>
+                )}
 
                 {/* Expiration Timer Badge */}
-                <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 shadow-xs border border-slate-700">
+                <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1 shadow-xs border border-slate-700 whitespace-nowrap">
                   <Clock className="w-3 h-3 text-amber-400" />
                   <span>Expires in {formatTimer(timeLeft)}</span>
                 </div>
               </div>
+
+              {/* Direct UPI Mobile Link */}
+              <a
+                href={upiUri}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-primary-blue hover:underline transition-colors pt-1"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Tap to pay directly on Mobile UPI App</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
 
               {/* Supported UPI Apps Row */}
               <div className="text-center pt-1 space-y-1">

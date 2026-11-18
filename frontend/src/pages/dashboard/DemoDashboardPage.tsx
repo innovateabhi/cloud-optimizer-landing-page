@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
+  ArrowRight,
   LayoutDashboard, 
   Server, 
   Sparkles, 
@@ -614,84 +615,70 @@ export const DemoDashboardPage: React.FC = () => {
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col font-sans selection:bg-blue-100 selection:text-blue-900">
       
       {/* ========================================================
-          TOP DEMO SANDBOX BANNER (Fixed Header with high contrast brand)
+          TOP DEMO SANDBOX BANNER (PREMIUM LIGHT GLASSMORPHIC)
          ======================================================== */}
-      <div className="sticky top-0 z-50 bg-[#0F172A] text-white px-4 sm:px-6 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 shrink-0 shadow-md">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 h-16 flex items-center justify-between gap-4 shadow-[0_1px_3px_0_rgba(0,0,0,0.03)] shrink-0">
+        <div className="flex items-center gap-3.5">
           <Link to="/" className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity">
-            <div className="relative flex shrink-0 items-center justify-center rounded-xl bg-[#2563EB] shadow-xs h-8 w-8">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path 
-                  d="M10 22C6.68629 22 4 19.3137 4 16C4 12.9863 6.22271 10.4907 9.15587 10.0667C9.69747 6.6436 12.656 4 16.2857 4C20.3703 4 23.7317 7.15857 24.0322 11.238C26.3142 11.8344 28 13.9189 28 16.4C28 19.4928 25.4928 22 22.4 22H10Z" 
-                  fill="white" 
-                  fillOpacity="0.22" 
-                  stroke="white" 
-                  strokeWidth="2" 
-                  strokeLinejoin="round" 
-                />
-                <path 
-                  d="M16 19V11M16 11L12.5 14.5M16 11L19.5 14.5" 
-                  stroke="white" 
-                  strokeWidth="2.2" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                />
-              </svg>
-            </div>
-            <div className="leading-none">
-              <span className="font-display font-extrabold text-base tracking-tight text-white drop-shadow-sm">
-                Cloud<span className="text-[#38BDF8]">Optimizer</span>
-              </span>
-            </div>
+            <CloudOptimizerLogo size="sm" />
           </Link>
 
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 hidden sm:inline" />
-          <div className="flex items-center gap-1.5 bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30 font-semibold text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>LIVE INTERACTIVE SANDBOX</span>
+          <div className="h-5 w-px bg-slate-200 hidden sm:block" />
+
+          {/* Live Interactive Sandbox Badge */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-blue-50 border border-blue-200/80 text-primary-blue shadow-2xs">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+            </span>
+            <span className="font-extrabold text-[11px] tracking-wide">Interactive Demo Sandbox</span>
           </div>
-          <span className="hidden md:inline text-slate-400">
+
+          <span className="hidden lg:inline text-xs font-medium text-slate-500">
             • Multi-Cloud FinOps Engine
           </span>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          {/* AI Copilot Pill */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* AI Copilot Button */}
           <button
             type="button"
             onClick={() => setShowAiAssistant(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-500/40 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 text-[#2563EB] border border-blue-200/80 font-bold text-xs transition-all shadow-2xs cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-indigo-300" />
-            <span>AI Copilot</span>
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+            <span className="hidden sm:inline">AI Copilot</span>
           </button>
 
-          {/* Quick Generate Report Pill */}
+          {/* Quick Generate Report */}
           <button
             type="button"
             onClick={() => setShowReportModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 font-semibold text-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition-all shadow-2xs cursor-pointer"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Generate FinOps Report</span>
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden md:inline">Generate Report</span>
           </button>
 
+          {/* Exit to Site */}
           <Link 
             to="/" 
-            className="text-slate-300 hover:text-white flex items-center gap-1 font-medium transition-colors"
+            className="text-slate-600 hover:text-slate-900 flex items-center gap-1 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 font-bold text-xs transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Exit to Site</span>
+            <span className="hidden sm:inline">Exit Demo</span>
           </Link>
 
+          {/* Primary CTA */}
           <Link 
             to="/register?plan=starter" 
-            className="px-3 py-1 rounded-lg bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold transition-all shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
           >
-            Connect Real Cloud →
+            <span>Connect Real Cloud</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
-      </div>
+      </header>
 
       {/* ========================================================
           MAIN APP LAYOUT (Sidebar + Content Workspace)
@@ -699,7 +686,7 @@ export const DemoDashboardPage: React.FC = () => {
       <div className="flex flex-1 relative">
         
         {/* LEFT PERMANENTLY FIXED NAVIGATION SIDEBAR */}
-        <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 hidden md:flex sticky top-[45px] h-[calc(100vh-45px)] overflow-y-auto z-30">
+        <aside className="w-64 bg-white border-r border-slate-200/90 flex flex-col justify-between shrink-0 hidden md:flex sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto z-30">
           
           <div className="p-4 space-y-6">
             
@@ -799,7 +786,7 @@ export const DemoDashboardPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto flex flex-col">
           
           {/* TOP CONTROLS & FILTER BAR */}
-          <header className="bg-white border-b border-slate-200/90 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-20 shadow-2xs">
+          <header className="bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-16 z-20 shadow-2xs">
             
             {/* Title / Tab Breadcrumb */}
             <div className="flex items-center gap-2">
