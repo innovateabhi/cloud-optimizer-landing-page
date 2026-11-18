@@ -39,9 +39,21 @@ export const SetupWizardPage: React.FC = () => {
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
+  // Plan-Enforced Resource, Region, and Cloud Account Quotas
+  const planLimits = {
+    free: { maxAccounts: 1, maxRegions: 1, maxResources: 5, label: 'Free Tier' },
+    starter: { maxAccounts: 3, maxRegions: 3, maxResources: 50, label: 'Starter Tier' },
+    business: { maxAccounts: 10, maxRegions: 30, maxResources: 500, label: 'Business Tier' },
+    enterprise: { maxAccounts: 999, maxRegions: 999, maxResources: 9999, label: 'Enterprise Tier' },
+  };
+
+  const planKey = (initialPlan as keyof typeof planLimits) in planLimits ? (initialPlan as keyof typeof planLimits) : 'starter';
+  const currentLimits = planLimits[planKey];
+
   // Step 1: Account & Regions
   const [accountName, setAccountName] = useState(initialTenant);
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['ap-south-2']);
+  const [regionLimitMsg, setRegionLimitMsg] = useState<string | null>(null);
 
   // Monthly Budget & Alert Email
   const [monthlyBudget, setMonthlyBudget] = useState('500');
@@ -87,12 +99,24 @@ export const SetupWizardPage: React.FC = () => {
   }, [accountName]);
 
   const toggleRegion = (regId: string) => {
+    setRegionLimitMsg(null);
     if (selectedRegions.includes(regId)) {
       if (selectedRegions.length > 1) {
         setSelectedRegions(selectedRegions.filter((r) => r !== regId));
+      } else {
+        setRegionLimitMsg('At least one active cloud region must remain selected.');
       }
     } else {
-      setSelectedRegions([...selectedRegions, regId]);
+      if (currentLimits.maxRegions === 1) {
+        // Free tier is strictly limited to 1 region: selecting a new one switches the selection
+        setSelectedRegions([regId]);
+        setRegionLimitMsg(`Free tier allows 1 monitored region. Switched active region to ${regId}. Upgrade to Starter for up to 3 regions.`);
+      } else if (selectedRegions.length >= currentLimits.maxRegions) {
+        // Starter is limited to 3 regions, etc.
+        setRegionLimitMsg(`${currentLimits.label} includes up to ${currentLimits.maxRegions} regions. Upgrade to unlock additional global regions.`);
+      } else {
+        setSelectedRegions([...selectedRegions, regId]);
+      }
     }
   };
 
@@ -107,7 +131,11 @@ export const SetupWizardPage: React.FC = () => {
     setAuthType('assume_role');
     setRoleArn('arn:aws:iam::416384710566:user/terra-admin');
     if (!selectedRegions.includes('ap-south-2')) {
-      setSelectedRegions(['ap-south-2', ...selectedRegions]);
+      if (currentLimits.maxRegions === 1) {
+        setSelectedRegions(['ap-south-2']);
+      } else {
+        setSelectedRegions(['ap-south-2', ...selectedRegions.slice(0, currentLimits.maxRegions - 1)]);
+      }
     }
     setValidationError(null);
     setCredentialsValid(false);
@@ -330,6 +358,31 @@ export const SetupWizardPage: React.FC = () => {
             </div>
 
             <div className="space-y-5">
+              {/* Cloud Account & Plan Entitlement Strip */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">
+                    Plan Cloud Account & Region Quota
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    initialPlan === 'free' ? 'bg-slate-200 text-slate-800' : 'bg-blue-100 text-primary-blue'
+                  }`}>
+                    {currentLimits.label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-600 pt-1">
+                  <div>
+                    Accounts: <strong className="text-slate-900">{currentLimits.maxAccounts === 1 ? '1 Account' : `Up to ${currentLimits.maxAccounts} Accounts`}</strong>
+                  </div>
+                  <div>
+                    Monitored Regions: <strong className="text-slate-900">{currentLimits.maxRegions === 1 ? '1 Region Max' : currentLimits.maxRegions >= 30 ? 'All Regions' : `Up to ${currentLimits.maxRegions} Regions`}</strong>
+                  </div>
+                  <div>
+                    Discovered Resources: <strong className="text-slate-900">Up to {currentLimits.maxResources} Resources</strong>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-text-primary block mb-1.5">
                   Account / Organization Name *
@@ -344,18 +397,32 @@ export const SetupWizardPage: React.FC = () => {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold text-text-primary">
-                    Select Monitored AWS Regions *
-                  </label>
-                  <span className="text-[11px] text-text-secondary">
-                    {selectedRegions.length} region(s) selected
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-text-primary">
+                      Select Monitored AWS Regions *
+                    </label>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-primary-blue border border-blue-200">
+                      {selectedRegions.length} of {currentLimits.maxRegions === 999 ? 'Unlimited' : currentLimits.maxRegions} Region{currentLimits.maxRegions > 1 ? 's' : ''} Selected
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-text-secondary font-medium">
+                    {initialPlan === 'free' ? 'Free Tier: 1 Region Max' : initialPlan === 'starter' ? 'Starter Tier: Up to 3 Regions' : 'All Regions Supported'}
                   </span>
                 </div>
+
+                {regionLimitMsg && (
+                  <div className="p-2.5 mb-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2 animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                    <span>{regionLimitMsg}</span>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {availableRegions.map((reg) => {
                     const isSelected = selectedRegions.includes(reg.id);
+                    const isAtLimit = !isSelected && currentLimits.maxRegions > 1 && selectedRegions.length >= currentLimits.maxRegions;
+
                     return (
                       <button
                         key={reg.id}
@@ -363,7 +430,9 @@ export const SetupWizardPage: React.FC = () => {
                         onClick={() => toggleRegion(reg.id)}
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
                           isSelected
-                            ? 'border-primary-blue bg-blue-50/50 text-text-primary ring-1 ring-primary-blue/30'
+                            ? 'border-primary-blue bg-blue-50/50 text-text-primary ring-1 ring-primary-blue/30 shadow-2xs'
+                            : isAtLimit
+                            ? 'border-slate-200 bg-slate-50/70 text-slate-400 hover:border-slate-300'
                             : 'border-border bg-white hover:bg-slate-50 text-text-secondary'
                         }`}
                       >
@@ -371,7 +440,7 @@ export const SetupWizardPage: React.FC = () => {
                           <div className="flex items-center gap-1.5 font-bold text-xs text-text-primary">
                             <span>{reg.name}</span>
                             {reg.isHost && (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold">
                                 Local Host AWS
                               </span>
                             )}
@@ -380,8 +449,14 @@ export const SetupWizardPage: React.FC = () => {
                             {reg.location}
                           </span>
                         </div>
-                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${isSelected ? 'bg-primary-blue border-primary-blue text-white' : 'border-slate-300'}`}>
-                          {isSelected && <Check className="w-3 h-3" />}
+                        <div className={`w-4 h-4 rounded-md border flex items-center justify-center ${
+                          isSelected 
+                            ? 'bg-primary-blue border-primary-blue text-white' 
+                            : isAtLimit 
+                            ? 'border-slate-300 bg-slate-100' 
+                            : 'border-slate-300'
+                        }`}>
+                          {isSelected ? <Check className="w-3 h-3" /> : isAtLimit ? <Lock className="w-2.5 h-2.5 text-slate-400" /> : null}
                         </div>
                       </button>
                     );

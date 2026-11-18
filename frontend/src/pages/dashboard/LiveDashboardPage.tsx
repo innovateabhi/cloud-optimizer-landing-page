@@ -208,7 +208,7 @@ export const LiveDashboardPage: React.FC = () => {
       name: 'Free Plan',
       badge: 'Free Tier',
       maxAccounts: 1,
-      maxRegions: 2,
+      maxRegions: 1,
       maxResources: 5,
       hasAiRecommendations: false,
       hasActionsAudit: false,
@@ -220,7 +220,7 @@ export const LiveDashboardPage: React.FC = () => {
       name: 'Starter Plan',
       badge: 'Starter Tier',
       maxAccounts: 3,
-      maxRegions: 5,
+      maxRegions: 3,
       maxResources: 50,
       hasAiRecommendations: true,
       hasActionsAudit: false,
@@ -705,7 +705,9 @@ export const LiveDashboardPage: React.FC = () => {
                   />
                 </div>
                 <div className="text-[10px] text-slate-400">
-                  {planInfo.maxAccounts} Cloud Account &bull; {planInfo.maxRegions} Regions
+                  {planInfo.maxAccounts === 999 
+                    ? 'Unlimited Accounts & Regions' 
+                    : `${planInfo.maxAccounts} Cloud Account${planInfo.maxAccounts > 1 ? 's' : ''} • ${planInfo.maxRegions >= 30 ? 'All Regions' : `${planInfo.maxRegions} Region${planInfo.maxRegions > 1 ? 's' : ''}`}`}
                 </div>
               </div>
             </div>

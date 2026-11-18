@@ -136,18 +136,51 @@ def connect_account():
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            INSERT INTO cloud_credentials (
-                tenant_id, account_name, provider, auth_type, role_arn, external_id,
-                access_key_id, secret_access_key, region, status, discovered_resources
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'connected', 7)
-        """, (
-            tenant_id, account_name, provider, auth_type,
-            role_arn or None, external_id or None,
-            access_key_id or None, secret_access_key or None,
-            region
-        ))
-        cred_id = cur.lastrowid
+        # Check tenant plan limits
+        cur.execute("SELECT plan FROM tenants WHERE id = %s", (tenant_id,))
+        t_row = cur.fetchone()
+        plan = t_row[0].lower() if t_row else 'free'
+
+        plan_limits = {
+            'free': {'max_accounts': 1, 'max_regions': 1},
+            'starter': {'max_accounts': 3, 'max_regions': 3},
+            'business': {'max_accounts': 10, 'max_regions': 30},
+            'enterprise': {'max_accounts': 999, 'max_regions': 999}
+        }
+        limits = plan_limits.get(plan, plan_limits['free'])
+
+        cur.execute("SELECT id FROM cloud_credentials WHERE tenant_id = %s", (tenant_id,))
+        existing_creds = cur.fetchall()
+
+        if len(existing_creds) >= limits['max_accounts']:
+            # Quota reached: update the primary cloud account connection
+            primary_id = existing_creds[0][0]
+            cur.execute("""
+                UPDATE cloud_credentials
+                SET account_name = %s, provider = %s, auth_type = %s, role_arn = %s,
+                    external_id = %s, access_key_id = %s, secret_access_key = %s,
+                    region = %s, status = 'connected', discovered_resources = 7
+                WHERE id = %s
+            """, (
+                account_name, provider, auth_type,
+                role_arn or None, external_id or None,
+                access_key_id or None, secret_access_key or None,
+                region, primary_id
+            ))
+            cred_id = primary_id
+        else:
+            cur.execute("""
+                INSERT INTO cloud_credentials (
+                    tenant_id, account_name, provider, auth_type, role_arn, external_id,
+                    access_key_id, secret_access_key, region, status, discovered_resources
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'connected', 7)
+            """, (
+                tenant_id, account_name, provider, auth_type,
+                role_arn or None, external_id or None,
+                access_key_id or None, secret_access_key or None,
+                region
+            ))
+            cred_id = cur.lastrowid
 
         # Update tenant setup_completed
         cur.execute("UPDATE tenants SET setup_completed = TRUE WHERE id = %s", (tenant_id,))
@@ -157,7 +190,7 @@ def connect_account():
         return jsonify({
             'status': 'success',
             'credentialId': cred_id,
-            'message': f'Cloud account "{account_name}" connected successfully'
+            'message': f'Cloud account "{account_name}" connected successfully ({limits["max_accounts"]} account quota on {plan.title()} Tier)'
         })
     except Exception as e:
         conn.rollback()
